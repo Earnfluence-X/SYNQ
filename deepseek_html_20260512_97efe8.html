@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>SYNQ · Secure P2P Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        body { background: #0F172A; overflow: hidden; height: 100vh; }
+        .sent-bubble { background: linear-gradient(135deg, #0D9488 0%, #14B8A6 100%); border-radius: 18px 18px 0 18px; }
+        .received-bubble { background: #334155; border-radius: 18px 18px 18px 0; }
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #1E293B; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+        .typing-dot { animation: blink 1.2s infinite; display: inline-block; width: 6px; height: 6px; background: #94A3B8; border-radius: 50%; margin: 0 1px; }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink { 0%,60%,100% { opacity: 0.3; } 30% { opacity: 1; } }
+        .message-enter { animation: fadeUp 0.2s ease-out; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        .status-online { background-color: #22C55E; box-shadow: 0 0 8px #22C55E; }
+        .status-offline { background-color: #64748B; }
+        .status-connecting { background-color: #EAB308; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+        
+        /* WhatsApp-style emoji picker */
+        .emoji-picker-dropdown {
+            position: absolute;
+            bottom: 70px;
+            left: 50px;
+            background: #1E293B;
+            border-radius: 20px;
+            padding: 12px;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5), 0 8px 10px -6px rgba(0,0,0,0.3);
+            border: 1px solid #334155;
+            z-index: 100;
+            width: 280px;
+            backdrop-filter: blur(8px);
+            animation: emojiSlideUp 0.15s ease-out;
+        }
+        @keyframes emojiSlideUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .emoji-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .emoji-grid span {
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 6px;
+            text-align: center;
+            border-radius: 12px;
+            transition: all 0.1s ease;
+        }
+        .emoji-grid span:hover {
+            background-color: #334155;
+            transform: scale(1.1);
+        }
+        /* Scrollbar for emoji picker */
+        .emoji-grid::-webkit-scrollbar { width: 3px; }
+        .emoji-grid::-webkit-scrollbar-track { background: #0F172A; border-radius: 10px; }
+        .emoji-grid::-webkit-scrollbar-thumb { background: #14B8A6; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-[#0F172A] text-gray-200">
+
+<div id="app" class="h-screen flex flex-col overflow-hidden">
+    <!-- Handshake Panel -->
+    <div id="handshakePanel" class="flex-1 flex items-center justify-center p-4">
+        <div class="max-w-4xl w-full bg-[#1E293B] rounded-2xl shadow-2xl border border-[#334155] p-6 md:p-8">
+            <div class="text-center mb-6">
+                <div class="text-4xl font-bold bg-gradient-to-r from-[#14B8A6] to-[#8B5CF6] bg-clip-text text-transparent">SYNQ</div>
+                <p class="text-gray-400 text-sm mt-1">Peer-to-peer encrypted messaging</p>
+            </div>
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-[#0F172A] rounded-xl p-5 border border-[#334155]">
+                    <div class="text-[#14B8A6] text-2xl mb-2">+</div>
+                    <h3 class="text-lg font-semibold">Start New Chat</h3>
+                    <p class="text-gray-400 text-sm mb-4">Generate invite code and share with your friend</p>
+                    <button id="btnCreateOffer" class="w-full py-2 bg-[#14B8A6] hover:bg-[#0D9488] rounded-xl transition font-medium">Create Invite</button>
+                    <div id="offerBox" class="mt-4 hidden">
+                        <label class="text-xs text-gray-400">Send this code to your friend</label>
+                        <textarea id="offerCode" rows="3" class="w-full mt-1 bg-[#0F172A] border border-[#334155] rounded-lg p-2 text-sm font-mono resize-none" readonly></textarea>
+                        <button id="copyOfferBtn" class="mt-2 text-sm bg-[#334155] hover:bg-[#475569] px-3 py-1.5 rounded-lg w-full">Copy Code</button>
+                        <div class="mt-3 text-center text-emerald-400 text-xs">Waiting for friend to respond...</div>
+                        <textarea id="answerInput" rows="3" class="w-full mt-3 bg-[#0F172A] border border-[#334155] rounded-lg p-2 text-sm font-mono resize-none" placeholder="Paste friend's response here"></textarea>
+                        <button id="finalizeBtn" class="mt-2 w-full py-2 bg-[#8B5CF6] hover:bg-[#7C3AED] rounded-xl transition">Complete Connection</button>
+                    </div>
+                </div>
+                <div class="bg-[#0F172A] rounded-xl p-5 border border-[#334155]">
+                    <div class="text-[#8B5CF6] text-2xl mb-2">link</div>
+                    <h3 class="text-lg font-semibold">Join Existing Chat</h3>
+                    <p class="text-gray-400 text-sm mb-4">Paste your friend's invite code</p>
+                    <textarea id="remoteOfferInput" rows="2" class="w-full bg-[#0F172A] border border-[#334155] rounded-lg p-2 text-sm font-mono resize-none" placeholder="Paste invite code here"></textarea>
+                    <button id="btnJoinAnswer" class="w-full mt-3 py-2 bg-[#8B5CF6] hover:bg-[#7C3AED] rounded-xl transition">Generate Response</button>
+                    <div id="answerBox" class="mt-4 hidden">
+                        <label class="text-xs text-gray-400">Send this response back to your friend</label>
+                        <textarea id="answerCode" rows="3" class="w-full mt-1 bg-[#0F172A] border border-[#334155] rounded-lg p-2 text-sm font-mono resize-none" readonly></textarea>
+                        <button id="copyAnswerBtn" class="mt-2 text-sm bg-[#334155] hover:bg-[#475569] px-3 py-1.5 rounded-lg w-full">Copy Response</button>
+                        <div class="mt-3 text-center text-green-400 text-xs">Connection will establish automatically after friend finalizes</div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6 text-center text-xs text-gray-500 border-t border-[#334155] pt-4">
+                One-time handshake only. After that, messages go directly between you.
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Interface -->
+    <div id="chatPanel" class="hidden flex-1 flex flex-col md:flex-row overflow-hidden">
+        <div class="w-full md:w-80 bg-[#1E293B] border-r border-[#334155] flex flex-col">
+            <div class="p-5 border-b border-[#334155]">
+                <div class="flex items-center justify-between">
+                    <span class="text-2xl font-bold bg-gradient-to-r from-[#14B8A6] to-[#8B5CF6] bg-clip-text text-transparent">SYNQ</span>
+                    <div class="flex items-center gap-2">
+                        <span id="statusDot" class="w-2 h-2 rounded-full status-offline"></span>
+                        <span id="statusText" class="text-xs text-gray-400">Offline</span>
+                    </div>
+                </div>
+            </div>
+            <div class="flex-1 overflow-y-auto custom-scroll p-3">
+                <div class="bg-[#0F172A] rounded-xl p-3 flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-[#14B8A6] to-[#0D9488] flex items-center justify-center font-bold text-lg">F</div>
+                    <div class="flex-1">
+                        <div class="font-medium" id="friendNameLabel">Friend</div>
+                        <div class="text-xs text-gray-400" id="connStatusText">Not connected</div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 border-t border-[#334155] text-xs text-gray-500 flex justify-between">
+                <span><i class="fas fa-lock mr-1"></i> Encrypted</span>
+                <button id="resetBtn" class="hover:text-red-400 transition"><i class="fas fa-power-off mr-1"></i> Reset</button>
+            </div>
+        </div>
+
+        <div class="flex-1 flex flex-col bg-[#0F172A] relative">
+            <div class="bg-[#1E293B] px-5 py-3 flex items-center justify-between border-b border-[#334155]">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-[#8B5CF6] flex items-center justify-center font-bold">F</div>
+                    <div>
+                        <div class="font-semibold" id="chatFriendLabel">Friend</div>
+                        <div class="text-xs text-gray-400" id="chatStatusLabel">Establishing connection</div>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button id="clearChatBtn" class="text-gray-400 hover:text-red-400 transition px-2" title="Clear messages"><i class="fas fa-trash-alt"></i></button>
+                    <button id="exportChatBtn" class="text-gray-400 hover:text-white transition px-2" title="Export chat"><i class="fas fa-download"></i></button>
+                </div>
+            </div>
+            
+            <div id="messagesContainer" class="flex-1 overflow-y-auto p-4 custom-scroll space-y-2"></div>
+            
+            <div id="typingIndicator" class="hidden px-5 py-1 text-xs text-gray-400 italic">
+                <span id="typingName">Friend</span> is typing<span class="typing-dot ml-0.5"></span><span class="typing-dot"></span><span class="typing-dot"></span>
+            </div>
+            
+            <div class="p-4 bg-[#0F172A] border-t border-[#334155] relative">
+                <div class="flex items-center gap-2">
+                    <div class="relative">
+                        <button id="emojiBtn" class="text-2xl text-gray-400 hover:text-white transition px-2">
+                            😊
+                        </button>
+                        <!-- WhatsApp-style dropdown emoji picker -->
+                        <div id="emojiPicker" class="hidden emoji-picker-dropdown">
+                            <div class="emoji-grid">
+                                <!-- Smileys & Emotions -->
+                                <span>😊</span><span>😂</span><span>❤️</span><span>🔥</span><span>👍</span><span>🎉</span><span>😢</span>
+                                <span>😎</span><span>🤔</span><span>👀</span><span>✅</span><span>💯</span><span>✨</span><span>🌟</span>
+                                <span>🥳</span><span>😍</span><span>😭</span><span>🤣</span><span>🙌</span><span>💪</span><span>👏</span>
+                                <span>💀</span><span>🎈</span><span>🎯</span><span>💡</span><span>💎</span><span>🔥</span><span>⭐</span>
+                                <span>🍕</span><span>☕</span><span>⚡</span><span>💻</span><span>📱</span><span>🎮</span><span>🎵</span>
+                                <span>💔</span><span>💖</span><span>💤</span><span>👻</span><span>🐱</span><span>🐶</span><span>🦄</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="imageBtn" class="text-xl text-gray-400 hover:text-white transition px-2"><i class="fas fa-image"></i></button>
+                    <input type="text" id="messageInput" placeholder="Type a message" class="flex-1 bg-[#1E293B] border border-[#334155] rounded-full px-5 py-2.5 focus:outline-none focus:ring-1 focus:ring-[#14B8A6] text-white">
+                    <button id="sendBtn" class="bg-gradient-to-r from-[#14B8A6] to-[#0D9488] w-10 h-10 rounded-full flex items-center justify-center transition hover:scale-105">
+                        <i class="fas fa-paper-plane text-white"></i>
+                    </button>
+                </div>
+                <div class="text-center text-[10px] text-gray-600 mt-2">Encrypted peer-to-peer - no servers</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const CONFIG = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+    
+    let pc = null, dc = null, connected = false;
+    let messages = [], pendingOutgoing = [];
+    let typingTimeout = null, myRole = null, createdOfferSdp = null;
+    
+    // DOM elements
+    const handshakePanel = document.getElementById('handshakePanel');
+    const chatPanel = document.getElementById('chatPanel');
+    const messagesContainer = document.getElementById('messagesContainer');
+    const typingIndicator = document.getElementById('typingIndicator');
+    
+    function loadMessages() {
+        const stored = localStorage.getItem('synq_messages');
+        if (stored) messages = JSON.parse(stored);
+        renderMessages();
+    }
+    
+    function saveMessages() { localStorage.setItem('synq_messages', JSON.stringify(messages.slice(-500))); }
+    
+    function addMessage(text, isSent, isImage = false, imageData = null) {
+        const msg = { id: Date.now() + Math.random(), text: text || (isImage ? "Image" : ""), sent: isSent, timestamp: new Date(), isImage, imageBase64: imageData };
+        messages.push(msg);
+        saveMessages();
+        renderMessages();
+        const container = document.getElementById('messagesContainer');
+        if (container) setTimeout(() => container.scrollTop = container.scrollHeight, 50);
+        if (!isSent && Notification.permission === 'granted' && document.hidden) {
+            new Notification("SYNQ", { body: `Friend: ${text?.slice(0,50) || 'Image'}` });
+        }
+    }
+    
+    function renderMessages() {
+        if (!messagesContainer) return;
+        let html = '', lastDate = '';
+        messages.forEach(msg => {
+            const date = new Date(msg.timestamp).toDateString();
+            if (lastDate !== date) {
+                html += `<div class="flex justify-center my-3"><span class="text-xs bg-[#1E293B] px-3 py-1 rounded-full text-gray-400">${date === new Date().toDateString() ? 'Today' : date}</span></div>`;
+                lastDate = date;
+            }
+            const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            if (msg.isImage && msg.imageBase64) {
+                if (msg.sent) {
+                    html += `<div class="flex justify-end mb-2 message-enter"><div class="max-w-[70%] sent-bubble p-2 shadow"><img src="${msg.imageBase64}" class="rounded-lg max-h-48 object-cover cursor-pointer" onclick="window.open('${msg.imageBase64}')"/><div class="text-right text-[10px] text-white/70 mt-1">${time} ✓</div></div></div>`;
+                } else {
+                    html += `<div class="flex justify-start mb-2 message-enter"><div class="max-w-[70%] received-bubble p-2 shadow"><img src="${msg.imageBase64}" class="rounded-lg max-h-48 object-cover cursor-pointer" onclick="window.open('${msg.imageBase64}')"/><div class="text-left text-[10px] text-gray-300 mt-1">${time}</div></div></div>`;
+                }
+            } else {
+                if (msg.sent) {
+                    html += `<div class="flex justify-end mb-2 message-enter"><div class="max-w-[70%] sent-bubble px-4 py-2 shadow"><p class="text-white break-words">${escapeHtml(msg.text)}</p><div class="text-right text-[10px] text-white/70 mt-1">${time} ✓</div></div></div>`;
+                } else {
+                    html += `<div class="flex justify-start mb-2 message-enter"><div class="max-w-[70%] received-bubble px-4 py-2 shadow"><p class="text-gray-100 break-words">${escapeHtml(msg.text)}</p><div class="text-left text-[10px] text-gray-300 mt-1">${time}</div></div></div>`;
+                }
+            }
+        });
+        if (messages.length === 0) html = '<div class="flex flex-col items-center justify-center h-full text-gray-500 text-center"><i class="fas fa-comment-dots text-3xl mb-2 opacity-30"></i><p>No messages yet.<br>Send a message to your friend</p></div>';
+        messagesContainer.innerHTML = html;
+    }
+    
+    function escapeHtml(str) { return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
+    
+    function setStatus(active) {
+        connected = active;
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const connStatus = document.getElementById('connStatusText');
+        const chatStatus = document.getElementById('chatStatusLabel');
+        if (statusDot) statusDot.className = `w-2 h-2 rounded-full ${active ? 'status-online' : 'status-offline'}`;
+        if (statusText) statusText.innerText = active ? 'Connected' : 'Offline';
+        if (connStatus) connStatus.innerText = active ? 'Connected - P2P' : 'Disconnected';
+        if (chatStatus) chatStatus.innerText = active ? 'Online - Encrypted' : 'Disconnected';
+    }
+    
+    function sendTyping(isTyping) { if (dc && dc.readyState === 'open') dc.send(JSON.stringify({ type: 'typing', status: isTyping })); }
+    function showTyping(show) { if (typingIndicator) typingIndicator.style.display = show ? 'flex' : 'none'; }
+    
+    function sendMessage(text, isImage = false, imageData = null) {
+        if (!connected || !dc || dc.readyState !== 'open') {
+            addMessage(text || (isImage ? "Image" : ""), true, isImage, imageData);
+            pendingOutgoing.push({ text, isImage, imageData });
+            alert("Not connected. Message saved and will send when connection establishes.");
+            return;
+        }
+        const payload = { type: isImage ? 'image' : 'text', content: text, image: imageData };
+        dc.send(JSON.stringify(payload));
+        addMessage(text || (isImage ? "Image" : ""), true, isImage, imageData);
+    }
+    
+    function flushPending() {
+        for (let p of pendingOutgoing) {
+            if (dc && dc.readyState === 'open') {
+                dc.send(JSON.stringify({ type: p.isImage ? 'image' : 'text', content: p.text, image: p.imageData }));
+            }
+        }
+        pendingOutgoing = [];
+    }
+    
+    function setupDataChannel() {
+        if (!dc) return;
+        dc.onopen = () => { setStatus(true); flushPending(); switchToChat(); };
+        dc.onclose = () => setStatus(false);
+        dc.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            if (data.type === 'text') addMessage(data.content, false);
+            else if (data.type === 'image') addMessage("Image", false, true, data.image);
+            else if (data.type === 'typing') showTyping(data.status);
+        };
+    }
+    
+    function switchToChat() {
+        handshakePanel.classList.add('hidden');
+        chatPanel.classList.remove('hidden');
+        renderMessages();
+    }
+    
+    // WebRTC actions
+    async function createOffer() {
+        pc = new RTCPeerConnection(CONFIG);
+        dc = pc.createDataChannel("synq");
+        setupDataChannel();
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        createdOfferSdp = JSON.stringify(pc.localDescription);
+        document.getElementById('offerCode').value = createdOfferSdp;
+        document.getElementById('offerBox').classList.remove('hidden');
+        myRole = 'creator';
+    }
+    
+    async function createAnswer(offerSdp) {
+        pc = new RTCPeerConnection(CONFIG);
+        pc.ondatachannel = (e) => { dc = e.channel; setupDataChannel(); };
+        await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(offerSdp)));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        const answerSdp = JSON.stringify(pc.localDescription);
+        document.getElementById('answerCode').value = answerSdp;
+        document.getElementById('answerBox').classList.remove('hidden');
+        myRole = 'joiner';
+        return answerSdp;
+    }
+    
+    async function setRemoteAnswer(answerSdp) {
+        if (!pc) return;
+        await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(answerSdp)));
+        setStatus(true);
+        switchToChat();
+        flushPending();
+    }
+    
+    function resetAll() { if (pc) pc.close(); pc = null; dc = null; connected = false; localStorage.clear(); location.reload(); }
+    
+    // Event listeners
+    document.getElementById('btnCreateOffer')?.addEventListener('click', () => createOffer());
+    document.getElementById('copyOfferBtn')?.addEventListener('click', () => { navigator.clipboard.writeText(createdOfferSdp); alert("Invite code copied. Send to your friend."); });
+    document.getElementById('finalizeBtn')?.addEventListener('click', async () => {
+        const answer = document.getElementById('answerInput').value;
+        if (answer) await setRemoteAnswer(answer);
+        else alert("Paste your friend's response code");
+    });
+    document.getElementById('btnJoinAnswer')?.addEventListener('click', async () => {
+        const offer = document.getElementById('remoteOfferInput').value;
+        if (!offer) { alert("Paste your friend's invite code"); return; }
+        await createAnswer(offer);
+    });
+    document.getElementById('copyAnswerBtn')?.addEventListener('click', () => {
+        const answer = document.getElementById('answerCode').value;
+        if (answer) { navigator.clipboard.writeText(answer); alert("Response copied. Send back to your friend."); }
+    });
+    
+    document.getElementById('sendBtn')?.addEventListener('click', () => {
+        const input = document.getElementById('messageInput');
+        if (input.value.trim()) { sendMessage(input.value.trim()); input.value = ''; sendTyping(false); }
+    });
+    document.getElementById('messageInput')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('sendBtn').click(); });
+    document.getElementById('messageInput')?.addEventListener('input', () => { sendTyping(true); if (typingTimeout) clearTimeout(typingTimeout); typingTimeout = setTimeout(() => sendTyping(false), 1500); });
+    document.getElementById('clearChatBtn')?.addEventListener('click', () => { if (confirm("Clear all messages?")) { messages = []; saveMessages(); renderMessages(); } });
+    document.getElementById('exportChatBtn')?.addEventListener('click', () => { const data = JSON.stringify(messages, null, 2); const blob = new Blob([data], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `synq_chat_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url); });
+    document.getElementById('resetBtn')?.addEventListener('click', () => { if (confirm("Reset connection and clear data?")) resetAll(); });
+    
+    // WhatsApp-style emoji picker - dropdown above input
+    const emojiBtn = document.getElementById('emojiBtn');
+    const emojiPicker = document.getElementById('emojiPicker');
+    
+    if (emojiBtn && emojiPicker) {
+        // Toggle emoji picker on button click
+        emojiBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            emojiPicker.classList.toggle('hidden');
+        });
+        
+        // Add emoji to message input when clicked
+        document.querySelectorAll('.emoji-grid span').forEach(emoji => {
+            emoji.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const input = document.getElementById('messageInput');
+                input.value += emoji.textContent;
+                input.focus();
+                emojiPicker.classList.add('hidden');
+            });
+        });
+        
+        // Close emoji picker when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!emojiBtn.contains(e.target) && emojiPicker && !emojiPicker.contains(e.target)) {
+                emojiPicker.classList.add('hidden');
+            }
+        });
+    }
+    
+    // Image upload
+    document.getElementById('imageBtn')?.addEventListener('click', () => {
+        const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*';
+        input.onchange = (e) => {
+            const file = e.target.files[0]; const reader = new FileReader();
+            reader.onload = (ev) => sendMessage("", true, ev.target.result);
+            reader.readAsDataURL(file);
+        };
+        input.click();
+    });
+    
+    loadMessages();
+    if (Notification.permission === 'default') Notification.requestPermission();
+</script>
+</body>
+</html>
