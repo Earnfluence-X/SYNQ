@@ -23,8 +23,6 @@
         @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         .status-online { background-color: #22C55E; box-shadow: 0 0 8px #22C55E; }
         .status-offline { background-color: #64748B; }
-        .status-connecting { background-color: #EAB308; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
         
         /* WhatsApp-style emoji picker */
         .emoji-picker-dropdown {
@@ -34,11 +32,10 @@
             background: #1E293B;
             border-radius: 20px;
             padding: 12px;
-            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5), 0 8px 10px -6px rgba(0,0,0,0.3);
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
             border: 1px solid #334155;
             z-index: 100;
             width: 280px;
-            backdrop-filter: blur(8px);
             animation: emojiSlideUp 0.15s ease-out;
         }
         @keyframes emojiSlideUp {
@@ -64,7 +61,6 @@
             background-color: #334155;
             transform: scale(1.1);
         }
-        /* Scrollbar for emoji picker */
         .emoji-grid::-webkit-scrollbar { width: 3px; }
         .emoji-grid::-webkit-scrollbar-track { background: #0F172A; border-radius: 10px; }
         .emoji-grid::-webkit-scrollbar-thumb { background: #14B8A6; border-radius: 10px; }
@@ -105,7 +101,7 @@
                         <label class="text-xs text-gray-400">Send this response back to your friend</label>
                         <textarea id="answerCode" rows="3" class="w-full mt-1 bg-[#0F172A] border border-[#334155] rounded-lg p-2 text-sm font-mono resize-none" readonly></textarea>
                         <button id="copyAnswerBtn" class="mt-2 text-sm bg-[#334155] hover:bg-[#475569] px-3 py-1.5 rounded-lg w-full">Copy Response</button>
-                        <div class="mt-3 text-center text-green-400 text-xs">Connection will establish automatically after friend finalizes</div>
+                        <div class="mt-3 text-center text-green-400 text-xs" id="waitingForFinalizeMsg">Waiting for friend to complete connection...</div>
                     </div>
                 </div>
             </div>
@@ -116,7 +112,7 @@
     </div>
 
     <!-- Chat Interface -->
-    <div id="chatPanel" class="hidden flex-1 flex flex-col md:flex-row overflow-hidden">
+    <div id="chatPanel" class="hidden flex-1 flex-col md:flex-row overflow-hidden">
         <div class="w-full md:w-80 bg-[#1E293B] border-r border-[#334155] flex flex-col">
             <div class="p-5 border-b border-[#334155]">
                 <div class="flex items-center justify-between">
@@ -166,19 +162,15 @@
             <div class="p-4 bg-[#0F172A] border-t border-[#334155] relative">
                 <div class="flex items-center gap-2">
                     <div class="relative">
-                        <button id="emojiBtn" class="text-2xl text-gray-400 hover:text-white transition px-2">
-                            😊
-                        </button>
-                        <!-- WhatsApp-style dropdown emoji picker -->
+                        <button id="emojiBtn" class="text-2xl text-gray-400 hover:text-white transition px-2">😊</button>
                         <div id="emojiPicker" class="hidden emoji-picker-dropdown">
                             <div class="emoji-grid">
-                                <!-- Smileys & Emotions -->
                                 <span>😊</span><span>😂</span><span>❤️</span><span>🔥</span><span>👍</span><span>🎉</span><span>😢</span>
                                 <span>😎</span><span>🤔</span><span>👀</span><span>✅</span><span>💯</span><span>✨</span><span>🌟</span>
                                 <span>🥳</span><span>😍</span><span>😭</span><span>🤣</span><span>🙌</span><span>💪</span><span>👏</span>
-                                <span>💀</span><span>🎈</span><span>🎯</span><span>💡</span><span>💎</span><span>🔥</span><span>⭐</span>
-                                <span>🍕</span><span>☕</span><span>⚡</span><span>💻</span><span>📱</span><span>🎮</span><span>🎵</span>
-                                <span>💔</span><span>💖</span><span>💤</span><span>👻</span><span>🐱</span><span>🐶</span><span>🦄</span>
+                                <span>💀</span><span>🎈</span><span>🎯</span><span>💡</span><span>💎</span><span>⭐</span><span>🍕</span>
+                                <span>☕</span><span>⚡</span><span>💻</span><span>📱</span><span>🎮</span><span>🎵</span><span>💔</span>
+                                <span>💖</span><span>💤</span><span>👻</span><span>🐱</span><span>🐶</span><span>🦄</span><span>🚀</span>
                             </div>
                         </div>
                     </div>
@@ -195,13 +187,13 @@
 </div>
 
 <script>
-    const CONFIG = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+    const CONFIG = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }] };
     
     let pc = null, dc = null, connected = false;
     let messages = [], pendingOutgoing = [];
     let typingTimeout = null, myRole = null, createdOfferSdp = null;
+    let isChatOpen = false;
     
-    // DOM elements
     const handshakePanel = document.getElementById('handshakePanel');
     const chatPanel = document.getElementById('chatPanel');
     const messagesContainer = document.getElementById('messagesContainer');
@@ -293,9 +285,21 @@
         pendingOutgoing = [];
     }
     
+    function switchToChat() {
+        if (isChatOpen) return;
+        isChatOpen = true;
+        handshakePanel.classList.add('hidden');
+        chatPanel.classList.remove('hidden');
+        renderMessages();
+    }
+    
     function setupDataChannel() {
         if (!dc) return;
-        dc.onopen = () => { setStatus(true); flushPending(); switchToChat(); };
+        dc.onopen = () => {
+            setStatus(true);
+            flushPending();
+            switchToChat();
+        };
         dc.onclose = () => setStatus(false);
         dc.onmessage = (e) => {
             const data = JSON.parse(e.data);
@@ -305,13 +309,6 @@
         };
     }
     
-    function switchToChat() {
-        handshakePanel.classList.add('hidden');
-        chatPanel.classList.remove('hidden');
-        renderMessages();
-    }
-    
-    // WebRTC actions
     async function createOffer() {
         pc = new RTCPeerConnection(CONFIG);
         dc = pc.createDataChannel("synq");
@@ -322,11 +319,22 @@
         document.getElementById('offerCode').value = createdOfferSdp;
         document.getElementById('offerBox').classList.remove('hidden');
         myRole = 'creator';
+        
+        // Monitor ICE connection state to switch to chat when connected
+        pc.oniceconnectionstatechange = () => {
+            if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                setStatus(true);
+                switchToChat();
+            }
+        };
     }
     
     async function createAnswer(offerSdp) {
         pc = new RTCPeerConnection(CONFIG);
-        pc.ondatachannel = (e) => { dc = e.channel; setupDataChannel(); };
+        pc.ondatachannel = (e) => { 
+            dc = e.channel; 
+            setupDataChannel();
+        };
         await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(offerSdp)));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
@@ -334,18 +342,34 @@
         document.getElementById('answerCode').value = answerSdp;
         document.getElementById('answerBox').classList.remove('hidden');
         myRole = 'joiner';
+        
+        // Monitor ICE connection state - this will trigger when creator finalizes
+        pc.oniceconnectionstatechange = () => {
+            console.log('ICE state:', pc.iceConnectionState);
+            if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                setStatus(true);
+                switchToChat();
+            }
+        };
+        
         return answerSdp;
     }
     
     async function setRemoteAnswer(answerSdp) {
         if (!pc) return;
         await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(answerSdp)));
-        setStatus(true);
-        switchToChat();
-        flushPending();
+        // The oniceconnectionstatechange will handle switching to chat
     }
     
-    function resetAll() { if (pc) pc.close(); pc = null; dc = null; connected = false; localStorage.clear(); location.reload(); }
+    function resetAll() { 
+        if (pc) pc.close(); 
+        pc = null; 
+        dc = null; 
+        connected = false; 
+        isChatOpen = false;
+        localStorage.clear(); 
+        location.reload(); 
+    }
     
     // Event listeners
     document.getElementById('btnCreateOffer')?.addEventListener('click', () => createOffer());
@@ -375,29 +399,19 @@
     document.getElementById('exportChatBtn')?.addEventListener('click', () => { const data = JSON.stringify(messages, null, 2); const blob = new Blob([data], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `synq_chat_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url); });
     document.getElementById('resetBtn')?.addEventListener('click', () => { if (confirm("Reset connection and clear data?")) resetAll(); });
     
-    // WhatsApp-style emoji picker - dropdown above input
+    // Emoji picker
     const emojiBtn = document.getElementById('emojiBtn');
     const emojiPicker = document.getElementById('emojiPicker');
-    
     if (emojiBtn && emojiPicker) {
-        // Toggle emoji picker on button click
-        emojiBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            emojiPicker.classList.toggle('hidden');
-        });
-        
-        // Add emoji to message input when clicked
+        emojiBtn.addEventListener('click', (e) => { e.stopPropagation(); emojiPicker.classList.toggle('hidden'); });
         document.querySelectorAll('.emoji-grid span').forEach(emoji => {
             emoji.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const input = document.getElementById('messageInput');
-                input.value += emoji.textContent;
-                input.focus();
+                document.getElementById('messageInput').value += emoji.textContent;
+                document.getElementById('messageInput').focus();
                 emojiPicker.classList.add('hidden');
             });
         });
-        
-        // Close emoji picker when clicking outside
         document.addEventListener('click', (e) => {
             if (!emojiBtn.contains(e.target) && emojiPicker && !emojiPicker.contains(e.target)) {
                 emojiPicker.classList.add('hidden');
