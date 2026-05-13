@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes">
     <title>SYNQ · Secure P2P Chat</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
@@ -23,6 +23,17 @@
         @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         .status-online { background-color: #22C55E; box-shadow: 0 0 8px #22C55E; }
         .status-offline { background-color: #64748B; }
+        
+        /* Mobile-friendly code containers */
+        .code-textarea {
+            font-size: 11px;
+            word-break: break-all;
+            white-space: pre-wrap;
+        }
+        @media (max-width: 640px) {
+            .code-textarea { font-size: 8px; }
+            .step-card { margin-bottom: 16px; }
+        }
         
         /* WhatsApp-style emoji picker */
         .emoji-picker-dropdown {
@@ -57,61 +68,97 @@
             border-radius: 12px;
             transition: all 0.1s ease;
         }
-        .emoji-grid span:hover {
-            background-color: #334155;
-            transform: scale(1.1);
-        }
+        .emoji-grid span:hover { background-color: #334155; transform: scale(1.1); }
         .emoji-grid::-webkit-scrollbar { width: 3px; }
         .emoji-grid::-webkit-scrollbar-track { background: #0F172A; border-radius: 10px; }
         .emoji-grid::-webkit-scrollbar-thumb { background: #14B8A6; border-radius: 10px; }
     </style>
 </head>
-<body class="bg-[#0F172A] text-gray-200">
+<body>
 
 <div id="app" class="h-screen flex flex-col overflow-hidden">
     <!-- Handshake Panel -->
-    <div id="handshakePanel" class="flex-1 flex items-center justify-center p-4">
-        <div class="max-w-4xl w-full bg-[#1E293B] rounded-2xl shadow-2xl border border-[#334155] p-6 md:p-8">
-            <div class="text-center mb-6">
+    <div id="handshakePanel" class="flex-1 overflow-y-auto p-4 custom-scroll">
+        <div class="max-w-4xl mx-auto">
+            <div class="text-center mb-6 mt-4">
                 <div class="text-4xl font-bold bg-gradient-to-r from-[#14B8A6] to-[#8B5CF6] bg-clip-text text-transparent">SYNQ</div>
-                <p class="text-gray-400 text-sm mt-1">Peer-to-peer encrypted messaging</p>
+                <p class="text-gray-400 text-sm mt-1">Peer-to-peer encrypted · No servers</p>
             </div>
-            <div class="grid md:grid-cols-2 gap-6">
-                <div class="bg-[#0F172A] rounded-xl p-5 border border-[#334155]">
-                    <div class="text-[#14B8A6] text-2xl mb-2">+</div>
-                    <h3 class="text-lg font-semibold">Start New Chat</h3>
-                    <p class="text-gray-400 text-sm mb-4">Generate invite code and share with your friend</p>
-                    <button id="btnCreateOffer" class="w-full py-2 bg-[#14B8A6] hover:bg-[#0D9488] rounded-xl transition font-medium">Create Invite</button>
-                    <div id="offerBox" class="mt-4 hidden">
-                        <label class="text-xs text-gray-400">Send this code to your friend</label>
-                        <textarea id="offerCode" rows="3" class="w-full mt-1 bg-[#0F172A] border border-[#334155] rounded-lg p-2 text-sm font-mono resize-none" readonly></textarea>
-                        <button id="copyOfferBtn" class="mt-2 text-sm bg-[#334155] hover:bg-[#475569] px-3 py-1.5 rounded-lg w-full">Copy Code</button>
-                        <div class="mt-3 text-center text-emerald-400 text-xs">Waiting for friend to respond...</div>
-                        <textarea id="answerInput" rows="3" class="w-full mt-3 bg-[#0F172A] border border-[#334155] rounded-lg p-2 text-sm font-mono resize-none" placeholder="Paste friend's response here"></textarea>
-                        <button id="finalizeBtn" class="mt-2 w-full py-2 bg-[#8B5CF6] hover:bg-[#7C3AED] rounded-xl transition">Complete Connection</button>
+            
+            <!-- Step 1: Choose Role -->
+            <div class="grid md:grid-cols-2 gap-4 mb-6">
+                <button id="showCreatorPanel" class="p-5 bg-[#1E293B] rounded-2xl border border-[#334155] hover:border-[#14B8A6] transition-all">
+                    <div class="text-[#14B8A6] text-3xl mb-2">+</div>
+                    <div class="font-bold text-lg">Start New Chat</div>
+                    <div class="text-xs text-gray-400 mt-1">You invite a friend</div>
+                </button>
+                <button id="showJoinerPanel" class="p-5 bg-[#1E293B] rounded-2xl border border-[#334155] hover:border-[#8B5CF6] transition-all">
+                    <div class="text-[#8B5CF6] text-3xl mb-2">🔗</div>
+                    <div class="font-bold text-lg">Join Existing Chat</div>
+                    <div class="text-xs text-gray-400 mt-1">Accept a friend's invite</div>
+                </button>
+            </div>
+
+            <!-- Creator Panel (hidden initially) -->
+            <div id="creatorPanel" class="hidden bg-[#1E293B] rounded-2xl border border-[#334155] p-5 mb-4">
+                <div class="flex items-center gap-2 mb-4">
+                    <div class="w-8 h-8 rounded-full bg-[#14B8A6]/20 flex items-center justify-center text-[#14B8A6] font-bold">1</div>
+                    <h3 class="font-bold text-lg">Generate Invite Code</h3>
+                </div>
+                <button id="btnCreateOffer" class="w-full py-3 bg-[#14B8A6] hover:bg-[#0D9488] rounded-xl transition font-medium mb-4">Generate Code</button>
+                <div id="offerBox" class="hidden">
+                    <label class="text-xs text-gray-400 mb-1 block">📋 Copy this code and send to your friend (WhatsApp, Signal, etc.)</label>
+                    <textarea id="offerCode" rows="3" class="code-textarea w-full bg-[#0F172A] border border-[#334155] rounded-lg p-3 text-xs font-mono resize-none" readonly></textarea>
+                    <button id="copyOfferBtn" class="mt-2 w-full py-2 bg-[#334155] hover:bg-[#475569] rounded-lg transition text-sm">Copy Code</button>
+                    
+                    <div class="mt-5 pt-3 border-t border-[#334155]">
+                        <div class="flex items-center gap-2 mb-3">
+                            <div class="w-8 h-8 rounded-full bg-[#8B5CF6]/20 flex items-center justify-center text-[#8B5CF6] font-bold">2</div>
+                            <h3 class="font-bold text-lg">Paste Friend's Response</h3>
+                        </div>
+                        <textarea id="answerInput" rows="2" class="code-textarea w-full bg-[#0F172A] border border-[#334155] rounded-lg p-3 text-xs font-mono resize-none" placeholder="After your friend generates a response, paste it here..."></textarea>
+                        <button id="finalizeBtn" class="mt-3 w-full py-3 bg-[#8B5CF6] hover:bg-[#7C3AED] rounded-xl transition font-medium">🔌 Connect Now</button>
+                        <p class="text-center text-[10px] text-gray-500 mt-2">Click after pasting your friend's response</p>
                     </div>
                 </div>
-                <div class="bg-[#0F172A] rounded-xl p-5 border border-[#334155]">
-                    <div class="text-[#8B5CF6] text-2xl mb-2">link</div>
-                    <h3 class="text-lg font-semibold">Join Existing Chat</h3>
-                    <p class="text-gray-400 text-sm mb-4">Paste your friend's invite code</p>
-                    <textarea id="remoteOfferInput" rows="2" class="w-full bg-[#0F172A] border border-[#334155] rounded-lg p-2 text-sm font-mono resize-none" placeholder="Paste invite code here"></textarea>
-                    <button id="btnJoinAnswer" class="w-full mt-3 py-2 bg-[#8B5CF6] hover:bg-[#7C3AED] rounded-xl transition">Generate Response</button>
-                    <div id="answerBox" class="mt-4 hidden">
-                        <label class="text-xs text-gray-400">Send this response back to your friend</label>
-                        <textarea id="answerCode" rows="3" class="w-full mt-1 bg-[#0F172A] border border-[#334155] rounded-lg p-2 text-sm font-mono resize-none" readonly></textarea>
-                        <button id="copyAnswerBtn" class="mt-2 text-sm bg-[#334155] hover:bg-[#475569] px-3 py-1.5 rounded-lg w-full">Copy Response</button>
-                        <div class="mt-3 text-center text-green-400 text-xs" id="waitingForFinalizeMsg">Waiting for friend to complete connection...</div>
+            </div>
+
+            <!-- Joiner Panel (hidden initially) -->
+            <div id="joinerPanel" class="hidden bg-[#1E293B] rounded-2xl border border-[#334155] p-5 mb-4">
+                <div class="flex items-center gap-2 mb-4">
+                    <div class="w-8 h-8 rounded-full bg-[#8B5CF6]/20 flex items-center justify-center text-[#8B5CF6] font-bold">1</div>
+                    <h3 class="font-bold text-lg">Paste Friend's Invite</h3>
+                </div>
+                <textarea id="remoteOfferInput" rows="2" class="code-textarea w-full bg-[#0F172A] border border-[#334155] rounded-lg p-3 text-xs font-mono resize-none" placeholder="Paste your friend's invite code here..."></textarea>
+                <button id="btnJoinAnswer" class="mt-3 w-full py-3 bg-[#8B5CF6] hover:bg-[#7C3AED] rounded-xl transition font-medium">Generate My Response</button>
+                
+                <div id="answerBox" class="hidden mt-5 pt-3 border-t border-[#334155]">
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="w-8 h-8 rounded-full bg-[#14B8A6]/20 flex items-center justify-center text-[#14B8A6] font-bold">2</div>
+                        <h3 class="font-bold text-lg">Send Response to Friend</h3>
+                    </div>
+                    <label class="text-xs text-gray-400 mb-1 block">📋 Copy this response and send it back to your friend</label>
+                    <textarea id="answerCode" rows="2" class="code-textarea w-full bg-[#0F172A] border border-[#334155] rounded-lg p-3 text-xs font-mono resize-none" readonly></textarea>
+                    <button id="copyAnswerBtn" class="mt-2 w-full py-2 bg-[#334155] hover:bg-[#475569] rounded-lg transition text-sm">Copy Response</button>
+                    
+                    <div class="mt-5">
+                        <div class="flex items-center gap-2 mb-3">
+                            <div class="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-green-500 font-bold">3</div>
+                            <h3 class="font-bold text-lg">Connect</h3>
+                        </div>
+                        <button id="joinerConnectBtn" class="w-full py-3 bg-green-600 hover:bg-green-500 rounded-xl transition font-medium">🔌 Click to Connect (After Friend Finalizes)</button>
+                        <p class="text-center text-[10px] text-gray-500 mt-2">Wait for your friend to paste your response, then click connect</p>
                     </div>
                 </div>
             </div>
-            <div class="mt-6 text-center text-xs text-gray-500 border-t border-[#334155] pt-4">
-                One-time handshake only. After that, messages go directly between you.
+
+            <div class="text-center text-xs text-gray-500 border-t border-[#334155] pt-4 mt-2">
+                🔒 One-time handshake only. After both click Connect, messages go directly between you.
             </div>
         </div>
     </div>
 
-    <!-- Chat Interface -->
+    <!-- Chat Interface (same as before) -->
     <div id="chatPanel" class="hidden flex-1 flex-col md:flex-row overflow-hidden">
         <div class="w-full md:w-80 bg-[#1E293B] border-r border-[#334155] flex flex-col">
             <div class="p-5 border-b border-[#334155]">
@@ -148,17 +195,14 @@
                     </div>
                 </div>
                 <div class="flex gap-2">
-                    <button id="clearChatBtn" class="text-gray-400 hover:text-red-400 transition px-2" title="Clear messages"><i class="fas fa-trash-alt"></i></button>
-                    <button id="exportChatBtn" class="text-gray-400 hover:text-white transition px-2" title="Export chat"><i class="fas fa-download"></i></button>
+                    <button id="clearChatBtn" class="text-gray-400 hover:text-red-400 transition px-2"><i class="fas fa-trash-alt"></i></button>
+                    <button id="exportChatBtn" class="text-gray-400 hover:text-white transition px-2"><i class="fas fa-download"></i></button>
                 </div>
             </div>
-            
             <div id="messagesContainer" class="flex-1 overflow-y-auto p-4 custom-scroll space-y-2"></div>
-            
             <div id="typingIndicator" class="hidden px-5 py-1 text-xs text-gray-400 italic">
                 <span id="typingName">Friend</span> is typing<span class="typing-dot ml-0.5"></span><span class="typing-dot"></span><span class="typing-dot"></span>
             </div>
-            
             <div class="p-4 bg-[#0F172A] border-t border-[#334155] relative">
                 <div class="flex items-center gap-2">
                     <div class="relative">
@@ -193,18 +237,28 @@
     let messages = [], pendingOutgoing = [];
     let typingTimeout = null, myRole = null, createdOfferSdp = null;
     let isChatOpen = false;
+    let localAnswerSdp = null;
     
     const handshakePanel = document.getElementById('handshakePanel');
     const chatPanel = document.getElementById('chatPanel');
     const messagesContainer = document.getElementById('messagesContainer');
     const typingIndicator = document.getElementById('typingIndicator');
     
+    // UI Panel toggles
+    document.getElementById('showCreatorPanel')?.addEventListener('click', () => {
+        document.getElementById('creatorPanel').classList.remove('hidden');
+        document.getElementById('joinerPanel').classList.add('hidden');
+    });
+    document.getElementById('showJoinerPanel')?.addEventListener('click', () => {
+        document.getElementById('joinerPanel').classList.remove('hidden');
+        document.getElementById('creatorPanel').classList.add('hidden');
+    });
+    
     function loadMessages() {
         const stored = localStorage.getItem('synq_messages');
         if (stored) messages = JSON.parse(stored);
         renderMessages();
     }
-    
     function saveMessages() { localStorage.setItem('synq_messages', JSON.stringify(messages.slice(-500))); }
     
     function addMessage(text, isSent, isImage = false, imageData = null) {
@@ -295,11 +349,7 @@
     
     function setupDataChannel() {
         if (!dc) return;
-        dc.onopen = () => {
-            setStatus(true);
-            flushPending();
-            switchToChat();
-        };
+        dc.onopen = () => { setStatus(true); flushPending(); switchToChat(); };
         dc.onclose = () => setStatus(false);
         dc.onmessage = (e) => {
             const data = JSON.parse(e.data);
@@ -319,46 +369,30 @@
         document.getElementById('offerCode').value = createdOfferSdp;
         document.getElementById('offerBox').classList.remove('hidden');
         myRole = 'creator';
-        
-        // Monitor ICE connection state to switch to chat when connected
-        pc.oniceconnectionstatechange = () => {
-            if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-                setStatus(true);
-                switchToChat();
-            }
-        };
     }
     
     async function createAnswer(offerSdp) {
         pc = new RTCPeerConnection(CONFIG);
-        pc.ondatachannel = (e) => { 
-            dc = e.channel; 
-            setupDataChannel();
-        };
+        pc.ondatachannel = (e) => { dc = e.channel; setupDataChannel(); };
         await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(offerSdp)));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        const answerSdp = JSON.stringify(pc.localDescription);
-        document.getElementById('answerCode').value = answerSdp;
+        localAnswerSdp = JSON.stringify(pc.localDescription);
+        document.getElementById('answerCode').value = localAnswerSdp;
         document.getElementById('answerBox').classList.remove('hidden');
         myRole = 'joiner';
-        
-        // Monitor ICE connection state - this will trigger when creator finalizes
-        pc.oniceconnectionstatechange = () => {
-            console.log('ICE state:', pc.iceConnectionState);
-            if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-                setStatus(true);
-                switchToChat();
-            }
-        };
-        
-        return answerSdp;
+        return localAnswerSdp;
     }
     
-    async function setRemoteAnswer(answerSdp) {
+    async function finalizeConnection(answerSdp) {
         if (!pc) return;
         await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(answerSdp)));
-        // The oniceconnectionstatechange will handle switching to chat
+    }
+    
+    async function joinerFinalizeConnection() {
+        if (!pc) return;
+        // Joiner already has remote description from the offer, now just wait for ICE
+        // The connection will complete automatically
     }
     
     function resetAll() { 
@@ -373,11 +407,20 @@
     
     // Event listeners
     document.getElementById('btnCreateOffer')?.addEventListener('click', () => createOffer());
-    document.getElementById('copyOfferBtn')?.addEventListener('click', () => { navigator.clipboard.writeText(createdOfferSdp); alert("Invite code copied. Send to your friend."); });
+    document.getElementById('copyOfferBtn')?.addEventListener('click', () => { navigator.clipboard.writeText(createdOfferSdp); alert("Invite code copied! Send to your friend."); });
     document.getElementById('finalizeBtn')?.addEventListener('click', async () => {
         const answer = document.getElementById('answerInput').value;
-        if (answer) await setRemoteAnswer(answer);
-        else alert("Paste your friend's response code");
+        if (!answer) { alert("Paste your friend's response code first"); return; }
+        await finalizeConnection(answer);
+        // Monitor ICE to switch to chat
+        if (pc) {
+            pc.oniceconnectionstatechange = () => {
+                if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                    setStatus(true);
+                    switchToChat();
+                }
+            };
+        }
     });
     document.getElementById('btnJoinAnswer')?.addEventListener('click', async () => {
         const offer = document.getElementById('remoteOfferInput').value;
@@ -385,8 +428,18 @@
         await createAnswer(offer);
     });
     document.getElementById('copyAnswerBtn')?.addEventListener('click', () => {
-        const answer = document.getElementById('answerCode').value;
-        if (answer) { navigator.clipboard.writeText(answer); alert("Response copied. Send back to your friend."); }
+        if (localAnswerSdp) { navigator.clipboard.writeText(localAnswerSdp); alert("Response copied! Send back to your friend."); }
+    });
+    document.getElementById('joinerConnectBtn')?.addEventListener('click', async () => {
+        await joinerFinalizeConnection();
+        if (pc) {
+            pc.oniceconnectionstatechange = () => {
+                if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                    setStatus(true);
+                    switchToChat();
+                }
+            };
+        }
     });
     
     document.getElementById('sendBtn')?.addEventListener('click', () => {
@@ -419,7 +472,6 @@
         });
     }
     
-    // Image upload
     document.getElementById('imageBtn')?.addEventListener('click', () => {
         const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*';
         input.onchange = (e) => {
