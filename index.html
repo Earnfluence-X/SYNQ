@@ -48,8 +48,80 @@
             padding: 12px 16px;
         }
         
-        .sent-bubble { background: linear-gradient(135deg, #0D9488 0%, #14B8A6 100%); border-radius: 18px 18px 0 18px; }
-        .received-bubble { background: #334155; border-radius: 18px 18px 18px 0; }
+        .sent-bubble { 
+            background: linear-gradient(135deg, #0D9488 0%, #14B8A6 100%); 
+            border-radius: 18px 18px 0 18px; 
+            position: relative;
+        }
+        .received-bubble { 
+            background: #334155; 
+            border-radius: 18px 18px 18px 0; 
+        }
+        
+        /* Message actions (edit/delete) - appears on hover */
+        .message-actions {
+            position: absolute;
+            top: -28px;
+            right: 0;
+            background: #1E293B;
+            border-radius: 20px;
+            padding: 4px 10px;
+            gap: 12px;
+            display: none;
+            z-index: 10;
+            border: 1px solid #334155;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        .message-wrapper:hover .message-actions {
+            display: flex;
+        }
+        .message-actions button {
+            background: none;
+            border: none;
+            color: #94A3B8;
+            cursor: pointer;
+            font-size: 12px;
+            padding: 4px 6px;
+            border-radius: 12px;
+            transition: all 0.2s;
+        }
+        .message-actions button:hover {
+            background: #334155;
+            color: white;
+        }
+        
+        /* Image styles */
+        .chat-image {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 12px;
+            cursor: pointer;
+            margin: 4px 0;
+            object-fit: cover;
+        }
+        .chat-image:hover {
+            opacity: 0.9;
+        }
+        
+        /* Image preview modal */
+        .image-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            cursor: pointer;
+        }
+        .image-modal img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+        }
         
         .custom-scroll::-webkit-scrollbar { width: 4px; }
         .custom-scroll::-webkit-scrollbar-track { background: #1E293B; }
@@ -57,6 +129,15 @@
         
         .status-online { background-color: #22C55E; }
         .status-offline { background-color: #64748B; }
+        
+        .status-icons {
+            font-size: 10px;
+            margin-left: 6px;
+        }
+        .status-sent { color: #94A3B8; }
+        .status-delivered { color: #14B8A6; }
+        .status-read { color: #22C55E; }
+        .edited-badge { font-size: 9px; color: #94A3B8; margin-left: 6px; }
         
         .toast {
             position: fixed;
@@ -130,8 +211,8 @@
                 <div>
                     <div class="font-semibold">Friend</div>
                     <div class="flex items-center gap-1">
-                        <span id="statusDot" class="w-2 h-2 rounded-full status-offline"></span>
-                        <span id="statusText" class="text-xs text-gray-400">Connected</span>
+                        <span id="statusDot" class="w-2 h-2 rounded-full status-online"></span>
+                        <span id="statusText" class="text-xs text-gray-400">Online</span>
                     </div>
                 </div>
             </div>
@@ -156,6 +237,7 @@
 </div>
 
 <script>
+    // Firebase Config
     const firebaseConfig = {
         apiKey: "AIzaSyCCz8lhH2fpNsmiByD7p8CKavsoO89zfQk",
         authDomain: "synq-2f6e7.firebaseapp.com",
@@ -174,6 +256,7 @@
     let messageListener = null;
     let checkInterval = null;
     let typingTimeout = null;
+    let isTyping = false;
     
     const setupPanel = document.getElementById('setupPanel');
     const chatPanel = document.getElementById('chatPanel');
@@ -205,6 +288,23 @@
         });
     }
     
+    function getStatusIcon(status) {
+        if (status === 'sent') return '<i class="fas fa-check status-icons status-sent"></i>';
+        if (status === 'delivered') return '<i class="fas fa-check-double status-icons status-delivered"></i>';
+        if (status === 'read') return '<i class="fas fa-check-double status-icons status-read"></i>';
+        return '';
+    }
+    
+    function showImageModal(imageSrc) {
+        const modal = document.createElement('div');
+        modal.className = 'image-modal';
+        modal.onclick = function() { modal.remove(); };
+        const img = document.createElement('img');
+        img.src = imageSrc;
+        modal.appendChild(img);
+        document.body.appendChild(modal);
+    }
+    
     function renderMessages() {
         if (!messagesContainer) return;
         
@@ -216,41 +316,162 @@
         let html = '';
         for (let i = 0; i < messages.length; i++) {
             const msg = messages[i];
+            const isDeleted = msg.deleted === true;
+            const displayText = isDeleted ? '(message deleted)' : (msg.edited ? msg.text + '<span class="edited-badge">edited</span>' : msg.text);
+            
             if (msg.sent) {
-                html += '<div class="flex justify-end mb-2"><div class="max-w-[75%] sent-bubble px-4 py-2"><p class="text-white break-words">' + escapeHtml(msg.text) + '</p><div class="text-right text-[10px] text-white/60 mt-1">' + escapeHtml(msg.time) + '</div></div></div>';
+                html += '<div class="flex justify-end mb-2 message-wrapper" data-message-id="' + msg.id + '">';
+                html += '<div class="max-w-[75%] sent-bubble px-4 py-2 relative">';
+                
+                if (!isDeleted && !msg.isImage) {
+                    html += '<div class="message-actions">';
+                    html += '<button class="edit-msg" data-id="' + msg.id + '"><i class="fas fa-edit"></i> Edit</button>';
+                    html += '<button class="delete-msg" data-id="' + msg.id + '"><i class="fas fa-trash-alt"></i> Delete</button>';
+                    html += '</div>';
+                }
+                
+                if (msg.isImage && msg.imageData) {
+                    html += '<img src="' + msg.imageData + '" class="chat-image" onclick="showImageModal(\'' + msg.imageData + '\')">';
+                } else {
+                    html += '<p class="text-white break-words">' + escapeHtml(displayText) + '</p>';
+                }
+                
+                html += '<div class="text-right text-[10px] text-white/60 mt-1 flex items-center justify-end">';
+                html += escapeHtml(msg.time);
+                html += getStatusIcon(msg.status);
+                html += '</div></div></div>';
             } else {
-                html += '<div class="flex justify-start mb-2"><div class="max-w-[75%] received-bubble px-4 py-2"><p class="text-gray-100 break-words">' + escapeHtml(msg.text) + '</p><div class="text-left text-[10px] text-gray-400 mt-1">' + escapeHtml(msg.time) + '</div></div></div>';
+                html += '<div class="flex justify-start mb-2">';
+                html += '<div class="max-w-[75%] received-bubble px-4 py-2">';
+                
+                if (msg.isImage && msg.imageData) {
+                    html += '<img src="' + msg.imageData + '" class="chat-image" onclick="showImageModal(\'' + msg.imageData + '\')">';
+                } else {
+                    html += '<p class="text-gray-100 break-words">' + escapeHtml(displayText) + '</p>';
+                }
+                
+                html += '<div class="text-left text-[10px] text-gray-400 mt-1">' + escapeHtml(msg.time) + '</div>';
+                html += '</div></div>';
+                
+                // Mark as read (only for text messages)
+                if (msg.status !== 'read' && !isDeleted && !msg.isImage && msg.sent === false) {
+                    setTimeout(function(id) {
+                        db.ref('rooms/' + currentRoom + '/messages/' + id).update({ status: 'read' });
+                    }, 500, msg.id);
+                }
             }
         }
         messagesContainer.innerHTML = html;
         scrollToBottom();
+        
+        // Attach edit/delete event listeners
+        document.querySelectorAll('.edit-msg').forEach(btn => {
+            btn.onclick = function(e) {
+                e.stopPropagation();
+                editMessage(this.getAttribute('data-id'));
+            };
+        });
+        document.querySelectorAll('.delete-msg').forEach(btn => {
+            btn.onclick = function(e) {
+                e.stopPropagation();
+                deleteMessage(this.getAttribute('data-id'));
+            };
+        });
     }
     
-    function addMessage(text, isSent) {
+    function editMessage(messageId) {
+        const msg = messages.find(m => m.id == messageId);
+        if (!msg || !msg.sent || msg.isImage) {
+            showToast("Cannot edit this message");
+            return;
+        }
+        
+        const newText = prompt('Edit your message:', msg.text);
+        if (newText && newText.trim() && newText.trim() !== msg.text) {
+            msg.text = newText.trim();
+            msg.edited = true;
+            db.ref('rooms/' + currentRoom + '/messages/' + messageId).update({
+                text: msg.text,
+                edited: true
+            });
+            renderMessages();
+            showToast('Message edited');
+        }
+    }
+    
+    function deleteMessage(messageId) {
+        if (confirm('Delete this message?')) {
+            const msg = messages.find(m => m.id == messageId);
+            if (msg) {
+                msg.deleted = true;
+                msg.text = '';
+                db.ref('rooms/' + currentRoom + '/messages/' + messageId).update({
+                    deleted: true,
+                    text: ''
+                });
+                renderMessages();
+                showToast('Message deleted');
+            }
+        }
+    }
+    
+    function addMessageToUI(text, isSent, isImage, imageData, status, messageId, edited, deleted) {
         const msg = {
-            id: Date.now(),
-            text: text,
+            id: messageId || (Date.now() + Math.random()),
+            text: text || (isImage ? "📷 Image" : ""),
             sent: isSent,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            isImage: isImage || false,
+            imageData: imageData || null,
+            status: status || (isSent ? 'sent' : 'delivered'),
+            edited: edited || false,
+            deleted: deleted || false
         };
         messages.push(msg);
         renderMessages();
         
-        if (currentRoom && isSent) {
-            db.ref('rooms/' + currentRoom + '/messages').push({
-                text: text,
+        if (currentRoom && isSent && !messageId) {
+            const newRef = db.ref('rooms/' + currentRoom + '/messages').push();
+            msg.id = newRef.key;
+            newRef.set({
+                id: msg.id,
+                text: msg.text,
                 sentBy: myId,
-                timestamp: firebase.database.ServerValue.TIMESTAMP
+                isImage: msg.isImage,
+                imageData: msg.imageData,
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                status: 'sent',
+                edited: false,
+                deleted: false
             });
         }
     }
     
-    function sendMessage(text) {
+    function sendMessage(text, isImage, imageData) {
         if (!currentRoom) {
             showToast("Not connected");
             return;
         }
-        addMessage(text, true);
+        addMessageToUI(text, true, isImage, imageData, 'sent', null, false, false);
+        
+        // Update status to delivered after short delay (simulates friend receiving)
+        setTimeout(() => {
+            const lastMsg = messages[messages.length - 1];
+            if (lastMsg && lastMsg.sent && lastMsg.status === 'sent') {
+                lastMsg.status = 'delivered';
+                if (currentRoom && lastMsg.id) {
+                    db.ref('rooms/' + currentRoom + '/messages/' + lastMsg.id).update({ status: 'delivered' });
+                }
+                renderMessages();
+            }
+        }, 1000);
+    }
+    
+    function sendTyping(isCurrentlyTyping) {
+        if (currentRoom && isTyping !== isCurrentlyTyping) {
+            isTyping = isCurrentlyTyping;
+            db.ref('rooms/' + currentRoom + '/typing/' + myId).set(isTyping ? true : null);
+        }
     }
     
     function enterChat(roomId) {
@@ -268,13 +489,18 @@
                 for (let key in msgs) {
                     const msg = msgs[key];
                     messages.push({
-                        id: key,
-                        text: msg.text,
+                        id: msg.id || key,
+                        text: msg.text || '',
                         sent: msg.sentBy === myId,
-                        time: new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        time: new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        isImage: msg.isImage || false,
+                        imageData: msg.imageData,
+                        status: msg.status || (msg.sentBy === myId ? 'sent' : 'delivered'),
+                        edited: msg.edited || false,
+                        deleted: msg.deleted || false
                     });
                 }
-                messages.sort((a, b) => a.id - b.id);
+                messages.sort((a, b) => (a.id || 0) - (b.id || 0));
                 renderMessages();
             }
         });
@@ -284,8 +510,55 @@
         messageListener = db.ref('rooms/' + roomId + '/messages').limitToLast(50);
         messageListener.on('child_added', (snap) => {
             const msg = snap.val();
-            if (msg.sentBy !== myId) {
-                addMessage(msg.text, false);
+            if (msg.sentBy !== myId && !messages.find(m => m.id === msg.id)) {
+                addMessageToUI(msg.text, false, msg.isImage || false, msg.imageData, 'delivered', msg.id, msg.edited || false, msg.deleted || false);
+                
+                // Mark as delivered to sender
+                if (msg.sentBy !== myId) {
+                    db.ref('rooms/' + roomId + '/messages/' + msg.id).update({ status: 'delivered' });
+                }
+            }
+        });
+        
+        // Listen for message updates (status, edit, delete)
+        db.ref('rooms/' + roomId + '/messages').on('child_changed', (snap) => {
+            const updated = snap.val();
+            const existingMsg = messages.find(m => m.id === updated.id);
+            if (existingMsg) {
+                existingMsg.status = updated.status || existingMsg.status;
+                existingMsg.text = updated.text || existingMsg.text;
+                existingMsg.edited = updated.edited || false;
+                existingMsg.deleted = updated.deleted || false;
+                renderMessages();
+            }
+        });
+        
+        // Listen for typing indicators
+        db.ref('rooms/' + roomId + '/typing').on('value', (snap) => {
+            const typing = snap.val();
+            let someoneTyping = false;
+            if (typing) {
+                for (let id in typing) {
+                    if (id !== myId && typing[id] === true) {
+                        someoneTyping = true;
+                        break;
+                    }
+                }
+            }
+            const typingEl = document.getElementById('typingIndicator');
+            if (typingEl) {
+                if (someoneTyping) {
+                    if (!document.getElementById('typingIndicator')) {
+                        const div = document.createElement('div');
+                        div.id = 'typingIndicator';
+                        div.className = 'px-4 py-1 text-xs text-gray-400 italic';
+                        div.innerHTML = 'Friend is typing<span class="typing-dot ml-0.5">.</span><span class="typing-dot">.</span><span class="typing-dot">.</span>';
+                        messagesContainer.parentNode.insertBefore(div, messagesContainer.nextSibling);
+                    }
+                } else {
+                    const el = document.getElementById('typingIndicator');
+                    if (el) el.remove();
+                }
             }
         });
         
@@ -297,7 +570,7 @@
         return Math.random().toString(36).substring(2, 10).toUpperCase();
     }
     
-    // ========== CREATE ROOM WITH POLLING (100% RELIABLE) ==========
+    // ========== CREATE ROOM WITH POLLING ==========
     document.getElementById('createRoomBtn').onclick = function() {
         const roomCode = generateRoomCode();
         document.getElementById('roomCodeDisplay').innerText = roomCode;
@@ -311,7 +584,6 @@
         }).then(() => {
             showToast("Room created! Share the code with your friend");
             
-            // POLLING: Check every second for joiner (100% reliable)
             if (checkInterval) clearInterval(checkInterval);
             checkInterval = setInterval(() => {
                 db.ref('rooms/' + roomCode + '/joiner').once('value').then((snap) => {
@@ -325,7 +597,6 @@
                 });
             }, 1000);
             
-            // Stop polling after 5 minutes
             setTimeout(() => {
                 if (checkInterval) {
                     clearInterval(checkInterval);
@@ -381,16 +652,25 @@
     document.getElementById('sendBtn').onclick = function() {
         const input = document.getElementById('messageInput');
         if (input.value.trim()) {
-            sendMessage(input.value.trim());
+            sendMessage(input.value.trim(), false, null);
             input.value = '';
+            sendTyping(false);
         }
     };
     
     document.getElementById('messageInput').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') document.getElementById('sendBtn').click();
+        if (e.key === 'Enter') {
+            document.getElementById('sendBtn').click();
+        }
     });
     
-    // Simple emoji picker
+    document.getElementById('messageInput').addEventListener('input', function() {
+        sendTyping(true);
+        if (typingTimeout) clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => sendTyping(false), 1500);
+    });
+    
+    // Emoji picker
     let emojiDiv = null;
     document.getElementById('emojiBtn').onclick = function(e) {
         e.stopPropagation();
@@ -415,20 +695,22 @@
     };
     document.addEventListener('click', () => { if (emojiDiv) { emojiDiv.remove(); emojiDiv = null; } });
     
+    // Image upload (5MB limit)
     document.getElementById('imageBtn').onclick = function() {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
         input.onchange = function(e) {
             const file = e.target.files[0];
-            if (file && file.size < 2 * 1024 * 1024) {
+            if (file && file.size < 5 * 1024 * 1024) {
+                showToast("Uploading image...");
                 const reader = new FileReader();
                 reader.onload = function(ev) {
-                    addMessage("📷 Image", true);
+                    sendMessage("", true, ev.target.result);
                 };
                 reader.readAsDataURL(file);
             } else {
-                showToast("Image too large (max 2MB)");
+                showToast("Image too large (max 5MB)");
             }
         };
         input.click();
