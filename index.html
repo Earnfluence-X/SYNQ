@@ -11,34 +11,62 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         * { font-family: 'Inter', sans-serif; }
-        body { background: #0F172A; overflow: hidden; height: 100vh; position: fixed; width: 100%; }
+        body { 
+            background: #0F172A; 
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
+        }
         
+        /* Full height flex container */
         .chat-container {
+            height: 100vh;
             height: 100dvh;
             display: flex;
             flex-direction: column;
             overflow: hidden;
         }
+        
+        /* Messages area  */
         .messages-area {
             flex: 1;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
+            padding: 16px;
         }
+        
+        /* Input area - FIXED AT BOTTOM */
         .input-area {
             background: #0F172A;
             border-top: 1px solid #334155;
-            padding: 12px;
+            padding: 12px 16px;
             flex-shrink: 0;
         }
         
-        .sent-bubble { background: linear-gradient(135deg, #0D9488 0%, #14B8A6 100%); border-radius: 18px 18px 0 18px; }
-        .received-bubble { background: #334155; border-radius: 18px 18px 18px 0; }
+        /* Message bubbles */
+        .sent-bubble { 
+            background: linear-gradient(135deg, #0D9488 0%, #14B8A6 100%); 
+            border-radius: 18px 18px 0 18px; 
+        }
+        .received-bubble { 
+            background: #334155; 
+            border-radius: 18px 18px 18px 0; 
+        }
         
         .custom-scroll::-webkit-scrollbar { width: 4px; }
         .custom-scroll::-webkit-scrollbar-track { background: #1E293B; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
         
-        .typing-dot { animation: blink 1.2s infinite; display: inline-block; width: 6px; height: 6px; background: #94A3B8; border-radius: 50%; margin: 0 1px; }
+        .typing-dot { 
+            animation: blink 1.2s infinite; 
+            display: inline-block; 
+            width: 6px; 
+            height: 6px; 
+            background: #94A3B8; 
+            border-radius: 50%; 
+            margin: 0 1px; 
+        }
         .typing-dot:nth-child(2) { animation-delay: 0.2s; }
         .typing-dot:nth-child(3) { animation-delay: 0.4s; }
         @keyframes blink { 0%,60%,100% { opacity: 0.3; } 30% { opacity: 1; } }
@@ -96,12 +124,12 @@
                         </div>
                         <button id="copyRoomCodeBtn" class="w-full py-2 bg-[#334155] hover:bg-[#475569] rounded-lg transition">Copy Code</button>
                         <div class="text-xs text-gray-500 mt-3">Send this code to your friend</div>
-                        <div class="mt-4 text-yellow-400 text-sm">⏳ Waiting for friend to join...</div>
+                        <div id="waitingMessage" class="mt-4 text-yellow-400 text-sm">⏳ Waiting for friend to join...</div>
                     </div>
                 </div>
                 
                 <div id="joinArea" class="hidden">
-                    <input type="text" id="joinCodeInput" placeholder="Enter 8-digit code" class="w-full bg-[#0F172A] border border-[#334155] rounded-xl p-3 text-center text-xl font-mono tracking-wider uppercase mb-3">
+                    <input type="text" id="joinCodeInput" placeholder="Enter code" class="w-full bg-[#0F172A] border border-[#334155] rounded-xl p-3 text-center text-xl font-mono tracking-wider uppercase mb-3">
                     <button id="doJoinBtn" class="w-full py-3 bg-[#8B5CF6] hover:bg-[#7C3AED] rounded-xl transition font-medium">Join Room</button>
                 </div>
             </div>
@@ -113,7 +141,8 @@
     </div>
 
     <!-- Chat Panel -->
-    <div id="chatPanel" class="hidden flex-1 flex-col h-full">
+    <div id="chatPanel" class="hidden flex-1 flex-col" style="height: 100vh; height: 100dvh;">
+        <!-- Header - fixed at top -->
         <div class="bg-[#1E293B] px-4 py-3 flex items-center justify-between border-b border-[#334155] flex-shrink-0">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-full bg-gradient-to-br from-[#14B8A6] to-[#0D9488] flex items-center justify-center font-bold text-lg">F</div>
@@ -130,12 +159,15 @@
             </button>
         </div>
         
-        <div id="messagesContainer" class="messages-area px-4 py-3 custom-scroll space-y-2"></div>
+        <!-- Messages - scrollable area -->
+        <div id="messagesContainer" class="flex-1 overflow-y-auto custom-scroll px-4 py-3 space-y-2"></div>
         
+        <!-- Typing indicator -->
         <div id="typingIndicator" class="hidden px-4 py-1 text-xs text-gray-400 italic flex-shrink-0">
             Friend is typing<span class="typing-dot ml-0.5"></span><span class="typing-dot"></span><span class="typing-dot"></span>
         </div>
         
+        <!-- Input area - FIXED AT BOTTOM -->
         <div class="input-area">
             <div class="flex items-center gap-2">
                 <button id="emojiBtn" class="text-2xl text-gray-400 hover:text-white transition px-2">😊</button>
@@ -171,6 +203,7 @@
     let joinListener = null;
     let typingTimeout = null;
     let isCurrentlyTyping = false;
+    let hasEnteredChat = false;  // Prevent duplicate entry
     
     const setupPanel = document.getElementById('setupPanel');
     const chatPanel = document.getElementById('chatPanel');
@@ -361,8 +394,9 @@
         });
     }
     
-    function startChat(roomId) {
-        if (currentRoom === roomId && chatPanel && chatPanel.classList.contains('hidden') === false) return;
+    function enterChat(roomId) {
+        if (hasEnteredChat) return;
+        hasEnteredChat = true;
         
         currentRoom = roomId;
         messages = [];
@@ -371,6 +405,10 @@
         setupPanel.classList.add('hidden');
         chatPanel.classList.remove('hidden');
         setConnected(true);
+        
+        setTimeout(function() {
+            document.getElementById('messageInput').focus();
+        }, 200);
         
         loadExistingMessages(roomId).then(function() {
             setupMessageListener(roomId);
@@ -382,35 +420,46 @@
         return Math.random().toString(36).substring(2, 10).toUpperCase();
     }
     
-    // Create Room
+    // ========== CREATE ROOM  ==========
     document.getElementById('createRoomBtn').onclick = function() {
         const roomCode = generateRoomCode();
         document.getElementById('roomCodeDisplay').innerText = roomCode;
         document.getElementById('createArea').classList.remove('hidden');
         document.getElementById('joinArea').classList.add('hidden');
+        document.getElementById('waitingMessage').innerHTML = '⏳ Waiting for friend to join...';
+        hasEnteredChat = false;
         
-        db.ref('rooms/' + roomCode).set({
-            created: firebase.database.ServerValue.TIMESTAMP,
-            creator: myId
+        // First, check if room already has a joiner (unlikely but possible)
+        db.ref('rooms/' + roomCode).once('value').then(function(snap) {
+            if (!snap.exists()) {
+                return db.ref('rooms/' + roomCode).set({
+                    created: firebase.database.ServerValue.TIMESTAMP,
+                    creator: myId,
+                    createdAt: Date.now()
+                });
+            }
         }).then(function() {
             showToast("Room created! Share the code with your friend");
             
-            // Check if joiner already exists (race condition fix)
-            db.ref('rooms/' + roomCode + '/joiner').once('value', function(snap) {
-                if (snap.val()) {
-                    showToast("Friend already joined! Entering chat...");
-                    startChat(roomCode);
-                    return;
+            // Set up listener for joiner
+            if (joinListener) joinListener.off();
+            joinListener = db.ref('rooms/' + roomCode + '/joiner').on('value', function(snap) {
+                const joinerId = snap.val();
+                if (joinerId && joinerId !== myId && !hasEnteredChat) {
+                    document.getElementById('waitingMessage').innerHTML = '✅ Friend joined! Entering chat...';
+                    showToast("Friend joined! Entering chat...");
+                    if (joinListener) joinListener.off();
+                    enterChat(roomCode);
                 }
-                
-                // Wait for joiner
-                joinListener = db.ref('rooms/' + roomCode + '/joiner').on('value', function(snap) {
-                    if (snap.val()) {
-                        showToast("Friend joined! Entering chat...");
-                        if (joinListener) joinListener.off();
-                        startChat(roomCode);
-                    }
-                });
+            });
+            
+            // Also check immediately if joiner already exists
+            db.ref('rooms/' + roomCode + '/joiner').once('value', function(snap) {
+                if (snap.val() && snap.val() !== myId && !hasEnteredChat) {
+                    document.getElementById('waitingMessage').innerHTML = '✅ Friend already joined! Entering chat...';
+                    if (joinListener) joinListener.off();
+                    enterChat(roomCode);
+                }
             });
         }).catch(function(err) {
             showToast("Error: " + err.message);
@@ -429,6 +478,7 @@
     document.getElementById('joinRoomBtn').onclick = function() {
         document.getElementById('joinArea').classList.remove('hidden');
         document.getElementById('createArea').classList.add('hidden');
+        hasEnteredChat = false;
     };
     
     document.getElementById('doJoinBtn').onclick = function() {
@@ -439,19 +489,20 @@
         }
         
         db.ref('rooms/' + code).once('value').then(function(snap) {
-            if (snap.exists()) {
-                return db.ref('rooms/' + code + '/joiner').set(myId);
-            } else {
+            if (!snap.exists()) {
                 throw new Error("Room not found");
             }
-        }).then(function() {
+            return db.ref('rooms/' + code + '/joiner').set(myId).then(function() {
+                return code;
+            });
+        }).then(function(roomCode) {
             showToast("Joined room!");
-            startChat(code);
+            enterChat(roomCode);
         }).catch(function(err) {
             if (err.message === "Room not found") {
                 showToast("Room not found. Check the code.");
             } else {
-                showToast("Error connecting to server");
+                showToast("Error: " + err.message);
             }
         });
     };
@@ -499,7 +550,7 @@
         }
         emojiPickerDiv = document.createElement('div');
         emojiPickerDiv.className = 'fixed bottom-20 left-4 bg-[#1E293B] border border-[#334155] rounded-xl p-2 grid grid-cols-7 gap-1 z-50';
-        const emojis = ['😊','😂','❤️','🔥','👍','🎉','😢','😎','🤔','👀','✅','💯','🌟','🥳','😍','💪','👏','🚀','🎈'];
+        const emojis = ['😊','😂','❤️','🔥','👍','🎉','😢','😎','🤔','👀','✅','💯','✨','🌟','🥳','😍','💪','👏','🚀','🎈'];
         for (let i = 0; i < emojis.length; i++) {
             const btn = document.createElement('button');
             btn.textContent = emojis[i];
