@@ -23,8 +23,9 @@
         @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         .status-online { background-color: #22C55E; box-shadow: 0 0 8px #22C55E; }
         .status-offline { background-color: #64748B; }
+        .status-connecting { background-color: #EAB308; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
         
-        /* Mobile-friendly code containers */
         .code-textarea {
             font-size: 11px;
             word-break: break-all;
@@ -32,10 +33,8 @@
         }
         @media (max-width: 640px) {
             .code-textarea { font-size: 8px; }
-            .step-card { margin-bottom: 16px; }
         }
         
-        /* WhatsApp-style emoji picker */
         .emoji-picker-dropdown {
             position: absolute;
             bottom: 70px;
@@ -72,6 +71,28 @@
         .emoji-grid::-webkit-scrollbar { width: 3px; }
         .emoji-grid::-webkit-scrollbar-track { background: #0F172A; border-radius: 10px; }
         .emoji-grid::-webkit-scrollbar-thumb { background: #14B8A6; border-radius: 10px; }
+        
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1E293B;
+            border: 1px solid #334155;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 13px;
+            z-index: 200;
+            animation: fadeInOut 2s ease;
+            pointer-events: none;
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
+            15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+        }
     </style>
 </head>
 <body>
@@ -85,7 +106,6 @@
                 <p class="text-gray-400 text-sm mt-1">Peer-to-peer encrypted · No servers</p>
             </div>
             
-            <!-- Step 1: Choose Role -->
             <div class="grid md:grid-cols-2 gap-4 mb-6">
                 <button id="showCreatorPanel" class="p-5 bg-[#1E293B] rounded-2xl border border-[#334155] hover:border-[#14B8A6] transition-all">
                     <div class="text-[#14B8A6] text-3xl mb-2">+</div>
@@ -99,7 +119,7 @@
                 </button>
             </div>
 
-            <!-- Creator Panel (hidden initially) -->
+            <!-- Creator Panel -->
             <div id="creatorPanel" class="hidden bg-[#1E293B] rounded-2xl border border-[#334155] p-5 mb-4">
                 <div class="flex items-center gap-2 mb-4">
                     <div class="w-8 h-8 rounded-full bg-[#14B8A6]/20 flex items-center justify-center text-[#14B8A6] font-bold">1</div>
@@ -107,7 +127,7 @@
                 </div>
                 <button id="btnCreateOffer" class="w-full py-3 bg-[#14B8A6] hover:bg-[#0D9488] rounded-xl transition font-medium mb-4">Generate Code</button>
                 <div id="offerBox" class="hidden">
-                    <label class="text-xs text-gray-400 mb-1 block">📋 Copy this code and send to your friend (WhatsApp, Signal, etc.)</label>
+                    <label class="text-xs text-gray-400 mb-1 block">📋 Copy this code and send to your friend</label>
                     <textarea id="offerCode" rows="3" class="code-textarea w-full bg-[#0F172A] border border-[#334155] rounded-lg p-3 text-xs font-mono resize-none" readonly></textarea>
                     <button id="copyOfferBtn" class="mt-2 w-full py-2 bg-[#334155] hover:bg-[#475569] rounded-lg transition text-sm">Copy Code</button>
                     
@@ -123,7 +143,7 @@
                 </div>
             </div>
 
-            <!-- Joiner Panel (hidden initially) -->
+            <!-- Joiner Panel -->
             <div id="joinerPanel" class="hidden bg-[#1E293B] rounded-2xl border border-[#334155] p-5 mb-4">
                 <div class="flex items-center gap-2 mb-4">
                     <div class="w-8 h-8 rounded-full bg-[#8B5CF6]/20 flex items-center justify-center text-[#8B5CF6] font-bold">1</div>
@@ -146,8 +166,8 @@
                             <div class="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-green-500 font-bold">3</div>
                             <h3 class="font-bold text-lg">Connect</h3>
                         </div>
-                        <button id="joinerConnectBtn" class="w-full py-3 bg-green-600 hover:bg-green-500 rounded-xl transition font-medium">🔌 Click to Connect (After Friend Finalizes)</button>
-                        <p class="text-center text-[10px] text-gray-500 mt-2">Wait for your friend to paste your response, then click connect</p>
+                        <button id="joinerConnectBtn" class="w-full py-3 bg-green-600 hover:bg-green-500 rounded-xl transition font-medium">🔌 Click to Connect</button>
+                        <p class="text-center text-[10px] text-gray-500 mt-2">After sending response, click Connect and wait for peer</p>
                     </div>
                 </div>
             </div>
@@ -158,7 +178,7 @@
         </div>
     </div>
 
-    <!-- Chat Interface (same as before) -->
+    <!-- Chat Interface -->
     <div id="chatPanel" class="hidden flex-1 flex-col md:flex-row overflow-hidden">
         <div class="w-full md:w-80 bg-[#1E293B] border-r border-[#334155] flex flex-col">
             <div class="p-5 border-b border-[#334155]">
@@ -231,20 +251,45 @@
 </div>
 
 <script>
-    const CONFIG = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }] };
+    // WebRTC Configuration with FREE TURN servers for better connectivity
+    const CONFIG = { 
+        iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" },
+            { urls: "stun:stun2.l.google.com:19302" },
+            { urls: "stun:stun3.l.google.com:19302" },
+            { urls: "stun:stun4.l.google.com:19302" },
+            { urls: "stun:stun.relay.metered.ca:80" },
+            { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+            { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+            { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
+        ],
+        iceTransportPolicy: 'all'
+    };
     
     let pc = null, dc = null, connected = false;
     let messages = [], pendingOutgoing = [];
     let typingTimeout = null, myRole = null, createdOfferSdp = null;
     let isChatOpen = false;
     let localAnswerSdp = null;
+    let connectionTimeout = null;
+    let iceTimeout = null;
     
     const handshakePanel = document.getElementById('handshakePanel');
     const chatPanel = document.getElementById('chatPanel');
     const messagesContainer = document.getElementById('messagesContainer');
     const typingIndicator = document.getElementById('typingIndicator');
     
-    // UI Panel toggles
+    function showToast(msg) {
+        let toast = document.querySelector('.toast');
+        if (toast) toast.remove();
+        toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.innerText = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2500);
+    }
+    
     document.getElementById('showCreatorPanel')?.addEventListener('click', () => {
         document.getElementById('creatorPanel').classList.remove('hidden');
         document.getElementById('joinerPanel').classList.add('hidden');
@@ -303,16 +348,21 @@
     
     function escapeHtml(str) { return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
     
-    function setStatus(active) {
+    function setStatus(active, statusMsg = null) {
         connected = active;
         const statusDot = document.getElementById('statusDot');
-        const statusText = document.getElementById('statusText');
+        const statusSpan = document.getElementById('statusText');
         const connStatus = document.getElementById('connStatusText');
         const chatStatus = document.getElementById('chatStatusLabel');
-        if (statusDot) statusDot.className = `w-2 h-2 rounded-full ${active ? 'status-online' : 'status-offline'}`;
-        if (statusText) statusText.innerText = active ? 'Connected' : 'Offline';
-        if (connStatus) connStatus.innerText = active ? 'Connected - P2P' : 'Disconnected';
-        if (chatStatus) chatStatus.innerText = active ? 'Online - Encrypted' : 'Disconnected';
+        
+        if (statusDot) {
+            statusDot.className = `w-2 h-2 rounded-full ${active ? 'status-online' : 'status-offline'}`;
+        }
+        if (statusSpan) statusSpan.innerText = active ? 'Connected' : (statusMsg || 'Offline');
+        if (connStatus) connStatus.innerText = active ? 'Connected - P2P' : (statusMsg || 'Disconnected');
+        if (chatStatus) chatStatus.innerText = active ? 'Online - Encrypted' : (statusMsg || 'Disconnected');
+        
+        if (active && !isChatOpen) switchToChat();
     }
     
     function sendTyping(isTyping) { if (dc && dc.readyState === 'open') dc.send(JSON.stringify({ type: 'typing', status: isTyping })); }
@@ -322,7 +372,7 @@
         if (!connected || !dc || dc.readyState !== 'open') {
             addMessage(text || (isImage ? "Image" : ""), true, isImage, imageData);
             pendingOutgoing.push({ text, isImage, imageData });
-            alert("Not connected. Message saved and will send when connection establishes.");
+            showToast("⚠️ Offline • Message saved");
             return;
         }
         const payload = { type: isImage ? 'image' : 'text', content: text, image: imageData };
@@ -345,12 +395,13 @@
         handshakePanel.classList.add('hidden');
         chatPanel.classList.remove('hidden');
         renderMessages();
+        showToast("🎉 Connected! Start chatting");
     }
     
     function setupDataChannel() {
         if (!dc) return;
-        dc.onopen = () => { setStatus(true); flushPending(); switchToChat(); };
-        dc.onclose = () => setStatus(false);
+        dc.onopen = () => { setStatus(true); flushPending(); };
+        dc.onclose = () => setStatus(false, "Disconnected");
         dc.onmessage = (e) => {
             const data = JSON.parse(e.data);
             if (data.type === 'text') addMessage(data.content, false);
@@ -363,17 +414,50 @@
         pc = new RTCPeerConnection(CONFIG);
         dc = pc.createDataChannel("synq");
         setupDataChannel();
+        
+        pc.oniceconnectionstatechange = () => {
+            console.log("ICE State:", pc.iceConnectionState);
+            if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                setStatus(true);
+                if (connectionTimeout) clearTimeout(connectionTimeout);
+            } else if (pc.iceConnectionState === 'failed') {
+                setStatus(false, "Connection failed (NAT/firewall)");
+                showToast("❌ Connection failed. Try both on same WiFi or mobile hotspot.");
+            }
+        };
+        
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         createdOfferSdp = JSON.stringify(pc.localDescription);
         document.getElementById('offerCode').value = createdOfferSdp;
         document.getElementById('offerBox').classList.remove('hidden');
         myRole = 'creator';
+        setStatus(false, "Waiting for friend...");
+        
+        // 45 second timeout
+        connectionTimeout = setTimeout(() => {
+            if (pc && pc.iceConnectionState !== 'connected' && pc.iceConnectionState !== 'completed') {
+                setStatus(false, "Connection timeout");
+                showToast("⏰ Connection timeout. Try again or switch networks.");
+            }
+        }, 45000);
     }
     
     async function createAnswer(offerSdp) {
         pc = new RTCPeerConnection(CONFIG);
         pc.ondatachannel = (e) => { dc = e.channel; setupDataChannel(); };
+        
+        pc.oniceconnectionstatechange = () => {
+            console.log("ICE State:", pc.iceConnectionState);
+            if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                setStatus(true);
+                if (connectionTimeout) clearTimeout(connectionTimeout);
+            } else if (pc.iceConnectionState === 'failed') {
+                setStatus(false, "Connection failed (NAT/firewall)");
+                showToast("❌ Connection failed. Try both on same WiFi or mobile hotspot.");
+            }
+        };
+        
         await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(offerSdp)));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
@@ -381,18 +465,27 @@
         document.getElementById('answerCode').value = localAnswerSdp;
         document.getElementById('answerBox').classList.remove('hidden');
         myRole = 'joiner';
+        setStatus(false, "Waiting for peer...");
+        
+        connectionTimeout = setTimeout(() => {
+            if (pc && pc.iceConnectionState !== 'connected' && pc.iceConnectionState !== 'completed') {
+                setStatus(false, "Connection timeout");
+                showToast("⏰ Connection timeout. Try again.");
+            }
+        }, 45000);
+        
         return localAnswerSdp;
     }
     
     async function finalizeConnection(answerSdp) {
         if (!pc) return;
-        await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(answerSdp)));
-    }
-    
-    async function joinerFinalizeConnection() {
-        if (!pc) return;
-        // Joiner already has remote description from the offer, now just wait for ICE
-        // The connection will complete automatically
+        try {
+            await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(answerSdp)));
+            showToast("🔌 Connecting... please wait");
+        } catch (err) {
+            console.error(err);
+            showToast("❌ Invalid response code");
+        }
     }
     
     function resetAll() { 
@@ -401,44 +494,33 @@
         dc = null; 
         connected = false; 
         isChatOpen = false;
+        if (connectionTimeout) clearTimeout(connectionTimeout);
         localStorage.clear(); 
         location.reload(); 
     }
     
     // Event listeners
     document.getElementById('btnCreateOffer')?.addEventListener('click', () => createOffer());
-    document.getElementById('copyOfferBtn')?.addEventListener('click', () => { navigator.clipboard.writeText(createdOfferSdp); alert("Invite code copied! Send to your friend."); });
+    document.getElementById('copyOfferBtn')?.addEventListener('click', () => { navigator.clipboard.writeText(createdOfferSdp); showToast("✅ Invite code copied!"); });
     document.getElementById('finalizeBtn')?.addEventListener('click', async () => {
         const answer = document.getElementById('answerInput').value;
-        if (!answer) { alert("Paste your friend's response code first"); return; }
+        if (!answer) { showToast("Paste your friend's response code first"); return; }
+        setStatus(false, "Connecting...");
         await finalizeConnection(answer);
-        // Monitor ICE to switch to chat
-        if (pc) {
-            pc.oniceconnectionstatechange = () => {
-                if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-                    setStatus(true);
-                    switchToChat();
-                }
-            };
-        }
     });
     document.getElementById('btnJoinAnswer')?.addEventListener('click', async () => {
         const offer = document.getElementById('remoteOfferInput').value;
-        if (!offer) { alert("Paste your friend's invite code"); return; }
+        if (!offer) { showToast("Paste your friend's invite code"); return; }
+        setStatus(false, "Generating response...");
         await createAnswer(offer);
     });
     document.getElementById('copyAnswerBtn')?.addEventListener('click', () => {
-        if (localAnswerSdp) { navigator.clipboard.writeText(localAnswerSdp); alert("Response copied! Send back to your friend."); }
+        if (localAnswerSdp) { navigator.clipboard.writeText(localAnswerSdp); showToast("✅ Response copied!"); }
     });
     document.getElementById('joinerConnectBtn')?.addEventListener('click', async () => {
-        await joinerFinalizeConnection();
-        if (pc) {
-            pc.oniceconnectionstatechange = () => {
-                if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-                    setStatus(true);
-                    switchToChat();
-                }
-            };
+        setStatus(false, "Waiting for connection...");
+        if (pc && pc.iceConnectionState === 'failed') {
+            showToast("Connection failed. Click Reset and try again.");
         }
     });
     
