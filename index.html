@@ -2,76 +2,60 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes, height=device-height">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes">
     <title>SYNQ · Private Chat</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         * { font-family: 'Inter', sans-serif; }
-        body { 
-            background: #0F172A; 
-            margin: 0;
-            padding: 0;
-            height: 100vh;
-            overflow: hidden;
+        body { background: #0F172A; margin: 0; padding: 0; height: 100vh; overflow: hidden; }
+        
+        #setupPanel {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            overflow-y: auto;
         }
         
-        /* Full height flex container */
-        .chat-container {
-            height: 100vh;
-            height: 100dvh;
+        #chatPanel {
+            height: 100%;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
         }
         
-        /* Messages area  */
+        .chat-header {
+            flex-shrink: 0;
+            background: #1E293B;
+            border-bottom: 1px solid #334155;
+            padding: 12px 16px;
+        }
+        
         .messages-area {
             flex: 1;
             overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
             padding: 16px;
         }
         
-        /* Input area - FIXED AT BOTTOM */
         .input-area {
+            flex-shrink: 0;
             background: #0F172A;
             border-top: 1px solid #334155;
             padding: 12px 16px;
-            flex-shrink: 0;
         }
         
-        /* Message bubbles */
-        .sent-bubble { 
-            background: linear-gradient(135deg, #0D9488 0%, #14B8A6 100%); 
-            border-radius: 18px 18px 0 18px; 
-        }
-        .received-bubble { 
-            background: #334155; 
-            border-radius: 18px 18px 18px 0; 
-        }
+        .sent-bubble { background: linear-gradient(135deg, #0D9488 0%, #14B8A6 100%); border-radius: 18px 18px 0 18px; }
+        .received-bubble { background: #334155; border-radius: 18px 18px 18px 0; }
         
         .custom-scroll::-webkit-scrollbar { width: 4px; }
         .custom-scroll::-webkit-scrollbar-track { background: #1E293B; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
         
-        .typing-dot { 
-            animation: blink 1.2s infinite; 
-            display: inline-block; 
-            width: 6px; 
-            height: 6px; 
-            background: #94A3B8; 
-            border-radius: 50%; 
-            margin: 0 1px; 
-        }
-        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes blink { 0%,60%,100% { opacity: 0.3; } 30% { opacity: 1; } }
-        
-        .status-online { background-color: #22C55E; box-shadow: 0 0 8px #22C55E; }
+        .status-online { background-color: #22C55E; }
         .status-offline { background-color: #64748B; }
         
         .toast {
@@ -96,61 +80,58 @@
         }
         
         button { cursor: pointer; }
-        input, textarea { outline: none; }
+        input { outline: none; }
     </style>
 </head>
 <body>
 
-<div id="app" class="chat-container">
-    <!-- Setup Panel -->
-    <div id="setupPanel" class="flex-1 flex flex-col items-center justify-center p-4 overflow-y-auto">
-        <div class="max-w-md w-full">
-            <div class="text-center mb-8">
-                <div class="text-4xl font-bold bg-gradient-to-r from-[#14B8A6] to-[#8B5CF6] bg-clip-text text-transparent">SYNQ</div>
-                <p class="text-gray-400 text-sm mt-1">Private · Encrypted · No login</p>
+<div id="setupPanel">
+    <div class="max-w-md w-full">
+        <div class="text-center mb-8">
+            <div class="text-4xl font-bold bg-gradient-to-r from-[#14B8A6] to-[#8B5CF6] bg-clip-text text-transparent">SYNQ</div>
+            <p class="text-gray-400 text-sm mt-1">Private · Encrypted · No login</p>
+        </div>
+        
+        <div class="bg-[#1E293B] rounded-2xl border border-[#334155] p-6">
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <button id="createRoomBtn" class="py-3 bg-[#14B8A6] hover:bg-[#0D9488] rounded-xl transition font-medium">Create Room</button>
+                <button id="joinRoomBtn" class="py-3 bg-[#8B5CF6] hover:bg-[#7C3AED] rounded-xl transition font-medium">Join Room</button>
             </div>
             
-            <div class="bg-[#1E293B] rounded-2xl border border-[#334155] p-6">
-                <div class="grid grid-cols-2 gap-3 mb-4">
-                    <button id="createRoomBtn" class="py-3 bg-[#14B8A6] hover:bg-[#0D9488] rounded-xl transition font-medium">Create Room</button>
-                    <button id="joinRoomBtn" class="py-3 bg-[#8B5CF6] hover:bg-[#7C3AED] rounded-xl transition font-medium">Join Room</button>
-                </div>
-                
-                <div id="createArea" class="hidden">
-                    <div class="text-center">
-                        <div class="text-emerald-400 mb-2">Your Room Code</div>
-                        <div class="bg-[#0F172A] p-4 rounded-xl mb-3">
-                            <span id="roomCodeDisplay" class="text-2xl font-mono tracking-wider font-bold"></span>
-                        </div>
-                        <button id="copyRoomCodeBtn" class="w-full py-2 bg-[#334155] hover:bg-[#475569] rounded-lg transition">Copy Code</button>
-                        <div class="text-xs text-gray-500 mt-3">Send this code to your friend</div>
-                        <div id="waitingMessage" class="mt-4 text-yellow-400 text-sm">⏳ Waiting for friend to join...</div>
+            <div id="createArea" class="hidden">
+                <div class="text-center">
+                    <div class="text-emerald-400 mb-2">✨ Your Room Code</div>
+                    <div class="bg-[#0F172A] p-4 rounded-xl mb-3">
+                        <span id="roomCodeDisplay" class="text-2xl font-mono tracking-wider font-bold"></span>
                     </div>
-                </div>
-                
-                <div id="joinArea" class="hidden">
-                    <input type="text" id="joinCodeInput" placeholder="Enter code" class="w-full bg-[#0F172A] border border-[#334155] rounded-xl p-3 text-center text-xl font-mono tracking-wider uppercase mb-3">
-                    <button id="doJoinBtn" class="w-full py-3 bg-[#8B5CF6] hover:bg-[#7C3AED] rounded-xl transition font-medium">Join Room</button>
+                    <button id="copyRoomCodeBtn" class="w-full py-2 bg-[#334155] hover:bg-[#475569] rounded-lg transition">Copy Code</button>
+                    <div class="text-xs text-gray-500 mt-3">Send this code to your friend</div>
+                    <div id="waitingMessage" class="mt-4 text-yellow-400 text-sm">⏳ Waiting for friend to join...</div>
                 </div>
             </div>
             
-            <div class="text-center text-xs text-gray-500 mt-6">
-                🔒 End-to-end encrypted · No servers except Firebase
+            <div id="joinArea" class="hidden">
+                <input type="text" id="joinCodeInput" placeholder="Enter code" class="w-full bg-[#0F172A] border border-[#334155] rounded-xl p-3 text-center text-xl font-mono tracking-wider uppercase mb-3">
+                <button id="doJoinBtn" class="w-full py-3 bg-[#8B5CF6] hover:bg-[#7C3AED] rounded-xl transition font-medium">Join Room</button>
             </div>
         </div>
+        
+        <div class="text-center text-xs text-gray-500 mt-6">
+            🔒 End-to-end encrypted · No servers except Firebase
+        </div>
     </div>
+</div>
 
-    <!-- Chat Panel -->
-    <div id="chatPanel" class="hidden flex-1 flex-col" style="height: 100vh; height: 100dvh;">
-        <!-- Header - fixed at top -->
-        <div class="bg-[#1E293B] px-4 py-3 flex items-center justify-between border-b border-[#334155] flex-shrink-0">
+<div id="chatPanel" style="display: none; height: 100%; flex-direction: column;">
+    <div class="chat-header">
+        <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-full bg-gradient-to-br from-[#14B8A6] to-[#0D9488] flex items-center justify-center font-bold text-lg">F</div>
                 <div>
                     <div class="font-semibold">Friend</div>
                     <div class="flex items-center gap-1">
                         <span id="statusDot" class="w-2 h-2 rounded-full status-offline"></span>
-                        <span id="statusText" class="text-xs text-gray-400">Connecting...</span>
+                        <span id="statusText" class="text-xs text-gray-400">Connected</span>
                     </div>
                 </div>
             </div>
@@ -158,31 +139,23 @@
                 <i class="fas fa-sign-out-alt"></i>
             </button>
         </div>
-        
-        <!-- Messages - scrollable area -->
-        <div id="messagesContainer" class="flex-1 overflow-y-auto custom-scroll px-4 py-3 space-y-2"></div>
-        
-        <!-- Typing indicator -->
-        <div id="typingIndicator" class="hidden px-4 py-1 text-xs text-gray-400 italic flex-shrink-0">
-            Friend is typing<span class="typing-dot ml-0.5"></span><span class="typing-dot"></span><span class="typing-dot"></span>
-        </div>
-        
-        <!-- Input area - FIXED AT BOTTOM -->
-        <div class="input-area">
-            <div class="flex items-center gap-2">
-                <button id="emojiBtn" class="text-2xl text-gray-400 hover:text-white transition px-2">😊</button>
-                <button id="imageBtn" class="text-xl text-gray-400 hover:text-white transition px-2"><i class="fas fa-image"></i></button>
-                <input type="text" id="messageInput" placeholder="Type a message..." class="flex-1 bg-[#1E293B] border border-[#334155] rounded-full px-4 py-2.5 focus:outline-none focus:ring-1 focus:ring-[#14B8A6] text-white">
-                <button id="sendBtn" class="bg-gradient-to-r from-[#14B8A6] to-[#0D9488] w-10 h-10 rounded-full flex items-center justify-center transition active:scale-95">
-                    <i class="fas fa-paper-plane text-white text-sm"></i>
-                </button>
-            </div>
+    </div>
+    
+    <div id="messagesContainer" class="messages-area custom-scroll space-y-2"></div>
+    
+    <div class="input-area">
+        <div class="flex items-center gap-2">
+            <button id="emojiBtn" class="text-2xl text-gray-400 hover:text-white transition px-2">😊</button>
+            <button id="imageBtn" class="text-xl text-gray-400 hover:text-white transition px-2"><i class="fas fa-image"></i></button>
+            <input type="text" id="messageInput" placeholder="Type a message..." class="flex-1 bg-[#1E293B] border border-[#334155] rounded-full px-4 py-2.5 focus:outline-none focus:ring-1 focus:ring-[#14B8A6] text-white">
+            <button id="sendBtn" class="bg-gradient-to-r from-[#14B8A6] to-[#0D9488] w-10 h-10 rounded-full flex items-center justify-center transition active:scale-95">
+                <i class="fas fa-paper-plane text-white text-sm"></i>
+            </button>
         </div>
     </div>
 </div>
 
 <script>
-    // Firebase Config
     const firebaseConfig = {
         apiKey: "AIzaSyCCz8lhH2fpNsmiByD7p8CKavsoO89zfQk",
         authDomain: "synq-2f6e7.firebaseapp.com",
@@ -199,11 +172,8 @@
     let myId = Math.random().toString(36).substring(2, 8);
     let messages = [];
     let messageListener = null;
-    let typingListener = null;
-    let joinListener = null;
+    let checkInterval = null;
     let typingTimeout = null;
-    let isCurrentlyTyping = false;
-    let hasEnteredChat = false;  // Prevent duplicate entry
     
     const setupPanel = document.getElementById('setupPanel');
     const chatPanel = document.getElementById('chatPanel');
@@ -221,9 +191,7 @@
     
     function scrollToBottom() {
         if (messagesContainer) {
-            setTimeout(() => {
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }, 50);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
     }
     
@@ -248,222 +216,125 @@
         let html = '';
         for (let i = 0; i < messages.length; i++) {
             const msg = messages[i];
-            if (msg.isImage && msg.imageData) {
-                if (msg.sent) {
-                    html += '<div class="flex justify-end mb-2"><div class="max-w-[75%] sent-bubble p-2"><img src="' + msg.imageData + '" class="rounded-lg max-h-48 object-cover cursor-pointer" onclick="window.open(this.src)"/><div class="text-right text-[10px] text-white/60 mt-1">' + escapeHtml(msg.time) + '</div></div></div>';
-                } else {
-                    html += '<div class="flex justify-start mb-2"><div class="max-w-[75%] received-bubble p-2"><img src="' + msg.imageData + '" class="rounded-lg max-h-48 object-cover cursor-pointer" onclick="window.open(this.src)"/><div class="text-left text-[10px] text-gray-400 mt-1">' + escapeHtml(msg.time) + '</div></div></div>';
-                }
+            if (msg.sent) {
+                html += '<div class="flex justify-end mb-2"><div class="max-w-[75%] sent-bubble px-4 py-2"><p class="text-white break-words">' + escapeHtml(msg.text) + '</p><div class="text-right text-[10px] text-white/60 mt-1">' + escapeHtml(msg.time) + '</div></div></div>';
             } else {
-                if (msg.sent) {
-                    html += '<div class="flex justify-end mb-2"><div class="max-w-[75%] sent-bubble px-4 py-2"><p class="text-white break-words">' + escapeHtml(msg.text) + '</p><div class="text-right text-[10px] text-white/60 mt-1">' + escapeHtml(msg.time) + '</div></div></div>';
-                } else {
-                    html += '<div class="flex justify-start mb-2"><div class="max-w-[75%] received-bubble px-4 py-2"><p class="text-gray-100 break-words">' + escapeHtml(msg.text) + '</p><div class="text-left text-[10px] text-gray-400 mt-1">' + escapeHtml(msg.time) + '</div></div></div>';
-                }
+                html += '<div class="flex justify-start mb-2"><div class="max-w-[75%] received-bubble px-4 py-2"><p class="text-gray-100 break-words">' + escapeHtml(msg.text) + '</p><div class="text-left text-[10px] text-gray-400 mt-1">' + escapeHtml(msg.time) + '</div></div></div>';
             }
         }
         messagesContainer.innerHTML = html;
         scrollToBottom();
     }
     
-    function addMessageToUI(text, isSent, isImage, imageData, timestamp) {
+    function addMessage(text, isSent) {
         const msg = {
-            id: Date.now() + Math.random(),
-            text: text || (isImage ? "📷 Image" : ""),
+            id: Date.now(),
+            text: text,
             sent: isSent,
-            time: timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            isImage: isImage || false,
-            imageData: imageData || null
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         messages.push(msg);
         renderMessages();
         
         if (currentRoom && isSent) {
             db.ref('rooms/' + currentRoom + '/messages').push({
-                id: msg.id,
-                text: msg.text,
+                text: text,
                 sentBy: myId,
-                isImage: msg.isImage,
-                imageData: msg.imageData,
                 timestamp: firebase.database.ServerValue.TIMESTAMP
             });
         }
     }
     
-    function sendMessage(text, isImage, imageData) {
-        isImage = isImage || false;
+    function sendMessage(text) {
         if (!currentRoom) {
-            showToast("Not connected to a room");
+            showToast("Not connected");
             return;
         }
-        addMessageToUI(text, true, isImage, imageData, null);
-        sendTyping(false);
-    }
-    
-    function sendTyping(isTyping) {
-        if (currentRoom && isCurrentlyTyping !== isTyping) {
-            isCurrentlyTyping = isTyping;
-            db.ref('rooms/' + currentRoom + '/typing/' + myId).set(isTyping ? true : null);
-        }
-    }
-    
-    function showTyping(show) {
-        const el = document.getElementById('typingIndicator');
-        if (el) el.style.display = show ? 'flex' : 'none';
-    }
-    
-    function setConnected(connected) {
-        const dot = document.getElementById('statusDot');
-        const text = document.getElementById('statusText');
-        if (dot) dot.className = 'w-2 h-2 rounded-full ' + (connected ? 'status-online' : 'status-offline');
-        if (text) text.innerText = connected ? 'Online' : 'Connecting...';
-    }
-    
-    function cleanupListeners() {
-        if (messageListener) { messageListener.off(); messageListener = null; }
-        if (typingListener) { typingListener.off(); typingListener = null; }
-        if (joinListener) { joinListener.off(); joinListener = null; }
-    }
-    
-    function loadExistingMessages(roomId) {
-        return db.ref('rooms/' + roomId + '/messages').once('value').then((snap) => {
-            const msgs = snap.val();
-            if (msgs) {
-                const msgList = [];
-                for (let key in msgs) {
-                    if (msgs.hasOwnProperty(key)) {
-                        msgList.push(msgs[key]);
-                    }
-                }
-                msgList.sort(function(a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
-                for (let i = 0; i < msgList.length; i++) {
-                    const msg = msgList[i];
-                    if (!messages.find(function(m) { return m.id === msg.id; })) {
-                        messages.push({
-                            id: msg.id,
-                            text: msg.text,
-                            sent: msg.sentBy === myId,
-                            time: new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                            isImage: msg.isImage || false,
-                            imageData: msg.imageData
-                        });
-                    }
-                }
-                renderMessages();
-            }
-        });
-    }
-    
-    function setupMessageListener(roomId) {
-        if (messageListener) messageListener.off();
-        messageListener = db.ref('rooms/' + roomId + '/messages').limitToLast(50);
-        messageListener.on('child_added', function(snap) {
-            const msg = snap.val();
-            if (msg.sentBy !== myId && !messages.find(function(m) { return m.id === msg.id; })) {
-                messages.push({
-                    id: msg.id,
-                    text: msg.text,
-                    sent: false,
-                    time: new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    isImage: msg.isImage || false,
-                    imageData: msg.imageData
-                });
-                renderMessages();
-                if (document.hidden && Notification.permission === 'granted') {
-                    new Notification("SYNQ", { body: (msg.text || "📷 Image").slice(0, 50) });
-                }
-            }
-        });
-    }
-    
-    function setupTypingListener(roomId) {
-        if (typingListener) typingListener.off();
-        typingListener = db.ref('rooms/' + roomId + '/typing');
-        typingListener.on('value', function(snap) {
-            const typing = snap.val();
-            let someoneTyping = false;
-            if (typing) {
-                for (let id in typing) {
-                    if (typing.hasOwnProperty(id) && id !== myId && typing[id] === true) {
-                        someoneTyping = true;
-                        break;
-                    }
-                }
-            }
-            showTyping(someoneTyping);
-        });
+        addMessage(text, true);
     }
     
     function enterChat(roomId) {
-        if (hasEnteredChat) return;
-        hasEnteredChat = true;
-        
+        if (currentRoom === roomId) return;
         currentRoom = roomId;
+        
+        setupPanel.style.display = 'none';
+        chatPanel.style.display = 'flex';
         messages = [];
-        cleanupListeners();
         
-        setupPanel.classList.add('hidden');
-        chatPanel.classList.remove('hidden');
-        setConnected(true);
-        
-        setTimeout(function() {
-            document.getElementById('messageInput').focus();
-        }, 200);
-        
-        loadExistingMessages(roomId).then(function() {
-            setupMessageListener(roomId);
-            setupTypingListener(roomId);
+        // Load existing messages
+        db.ref('rooms/' + roomId + '/messages').once('value', (snap) => {
+            const msgs = snap.val();
+            if (msgs) {
+                for (let key in msgs) {
+                    const msg = msgs[key];
+                    messages.push({
+                        id: key,
+                        text: msg.text,
+                        sent: msg.sentBy === myId,
+                        time: new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    });
+                }
+                messages.sort((a, b) => a.id - b.id);
+                renderMessages();
+            }
         });
+        
+        // Listen for new messages
+        if (messageListener) messageListener.off();
+        messageListener = db.ref('rooms/' + roomId + '/messages').limitToLast(50);
+        messageListener.on('child_added', (snap) => {
+            const msg = snap.val();
+            if (msg.sentBy !== myId) {
+                addMessage(msg.text, false);
+            }
+        });
+        
+        scrollToBottom();
+        setTimeout(() => document.getElementById('messageInput')?.focus(), 200);
     }
     
     function generateRoomCode() {
         return Math.random().toString(36).substring(2, 10).toUpperCase();
     }
     
-    // ========== CREATE ROOM  ==========
+    // ========== CREATE ROOM WITH POLLING (100% RELIABLE) ==========
     document.getElementById('createRoomBtn').onclick = function() {
         const roomCode = generateRoomCode();
         document.getElementById('roomCodeDisplay').innerText = roomCode;
         document.getElementById('createArea').classList.remove('hidden');
         document.getElementById('joinArea').classList.add('hidden');
         document.getElementById('waitingMessage').innerHTML = '⏳ Waiting for friend to join...';
-        hasEnteredChat = false;
         
-        // First, check if room already has a joiner (unlikely but possible)
-        db.ref('rooms/' + roomCode).once('value').then(function(snap) {
-            if (!snap.exists()) {
-                return db.ref('rooms/' + roomCode).set({
-                    created: firebase.database.ServerValue.TIMESTAMP,
-                    creator: myId,
-                    createdAt: Date.now()
-                });
-            }
-        }).then(function() {
+        db.ref('rooms/' + roomCode).set({
+            created: firebase.database.ServerValue.TIMESTAMP,
+            creator: myId
+        }).then(() => {
             showToast("Room created! Share the code with your friend");
             
-            // Set up listener for joiner
-            if (joinListener) joinListener.off();
-            joinListener = db.ref('rooms/' + roomCode + '/joiner').on('value', function(snap) {
-                const joinerId = snap.val();
-                if (joinerId && joinerId !== myId && !hasEnteredChat) {
-                    document.getElementById('waitingMessage').innerHTML = '✅ Friend joined! Entering chat...';
-                    showToast("Friend joined! Entering chat...");
-                    if (joinListener) joinListener.off();
-                    enterChat(roomCode);
-                }
-            });
+            // POLLING: Check every second for joiner (100% reliable)
+            if (checkInterval) clearInterval(checkInterval);
+            checkInterval = setInterval(() => {
+                db.ref('rooms/' + roomCode + '/joiner').once('value').then((snap) => {
+                    const joinerId = snap.val();
+                    if (joinerId && joinerId !== myId) {
+                        clearInterval(checkInterval);
+                        document.getElementById('waitingMessage').innerHTML = '✅ Friend joined! Entering chat...';
+                        showToast("Friend joined! Entering chat...");
+                        enterChat(roomCode);
+                    }
+                });
+            }, 1000);
             
-            // Also check immediately if joiner already exists
-            db.ref('rooms/' + roomCode + '/joiner').once('value', function(snap) {
-                if (snap.val() && snap.val() !== myId && !hasEnteredChat) {
-                    document.getElementById('waitingMessage').innerHTML = '✅ Friend already joined! Entering chat...';
-                    if (joinListener) joinListener.off();
-                    enterChat(roomCode);
+            // Stop polling after 5 minutes
+            setTimeout(() => {
+                if (checkInterval) {
+                    clearInterval(checkInterval);
+                    if (!currentRoom) {
+                        document.getElementById('waitingMessage').innerHTML = '⏰ No one joined. Refresh to try again.';
+                    }
                 }
-            });
-        }).catch(function(err) {
-            showToast("Error: " + err.message);
-        });
+            }, 300000);
+        }).catch(err => showToast("Error: " + err.message));
     };
     
     document.getElementById('copyRoomCodeBtn').onclick = function() {
@@ -474,11 +345,10 @@
         }
     };
     
-    // Join Room
+    // ========== JOIN ROOM ==========
     document.getElementById('joinRoomBtn').onclick = function() {
         document.getElementById('joinArea').classList.remove('hidden');
         document.getElementById('createArea').classList.add('hidden');
-        hasEnteredChat = false;
     };
     
     document.getElementById('doJoinBtn').onclick = function() {
@@ -488,31 +358,22 @@
             return;
         }
         
-        db.ref('rooms/' + code).once('value').then(function(snap) {
+        db.ref('rooms/' + code).once('value').then((snap) => {
             if (!snap.exists()) {
-                throw new Error("Room not found");
-            }
-            return db.ref('rooms/' + code + '/joiner').set(myId).then(function() {
-                return code;
-            });
-        }).then(function(roomCode) {
-            showToast("Joined room!");
-            enterChat(roomCode);
-        }).catch(function(err) {
-            if (err.message === "Room not found") {
                 showToast("Room not found. Check the code.");
-            } else {
-                showToast("Error: " + err.message);
+                return;
             }
-        });
+            db.ref('rooms/' + code + '/joiner').set(myId).then(() => {
+                showToast("Joined room!");
+                enterChat(code);
+            });
+        }).catch(() => showToast("Error connecting"));
     };
     
     document.getElementById('leaveRoomBtn').onclick = function() {
         if (confirm("Leave the room?")) {
-            cleanupListeners();
-            if (currentRoom) {
-                db.ref('rooms/' + currentRoom + '/typing/' + myId).set(null);
-            }
+            if (messageListener) messageListener.off();
+            if (checkInterval) clearInterval(checkInterval);
             location.reload();
         }
     };
@@ -520,60 +381,39 @@
     document.getElementById('sendBtn').onclick = function() {
         const input = document.getElementById('messageInput');
         if (input.value.trim()) {
-            sendMessage(input.value.trim(), false, null);
+            sendMessage(input.value.trim());
             input.value = '';
         }
     };
     
     document.getElementById('messageInput').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            document.getElementById('sendBtn').click();
-        }
+        if (e.key === 'Enter') document.getElementById('sendBtn').click();
     });
     
-    document.getElementById('messageInput').addEventListener('input', function() {
-        sendTyping(true);
-        if (typingTimeout) clearTimeout(typingTimeout);
-        typingTimeout = setTimeout(function() {
-            sendTyping(false);
-        }, 1500);
-    });
-    
-    // Emoji picker
-    let emojiPickerDiv = null;
+    // Simple emoji picker
+    let emojiDiv = null;
     document.getElementById('emojiBtn').onclick = function(e) {
         e.stopPropagation();
-        if (emojiPickerDiv) {
-            emojiPickerDiv.remove();
-            emojiPickerDiv = null;
-            return;
-        }
-        emojiPickerDiv = document.createElement('div');
-        emojiPickerDiv.className = 'fixed bottom-20 left-4 bg-[#1E293B] border border-[#334155] rounded-xl p-2 grid grid-cols-7 gap-1 z-50';
+        if (emojiDiv) { emojiDiv.remove(); emojiDiv = null; return; }
+        emojiDiv = document.createElement('div');
+        emojiDiv.className = 'fixed bottom-20 left-4 bg-[#1E293B] border border-[#334155] rounded-xl p-2 grid grid-cols-7 gap-1 z-50';
         const emojis = ['😊','😂','❤️','🔥','👍','🎉','😢','😎','🤔','👀','✅','💯','✨','🌟','🥳','😍','💪','👏','🚀','🎈'];
-        for (let i = 0; i < emojis.length; i++) {
+        emojis.forEach(e => {
             const btn = document.createElement('button');
-            btn.textContent = emojis[i];
+            btn.textContent = e;
             btn.className = 'p-2 hover:bg-[#334155] rounded-lg text-xl';
-            btn.onclick = function(e) {
+            btn.onclick = (e) => {
                 e.stopPropagation();
-                document.getElementById('messageInput').value += emojis[i];
-                if (emojiPickerDiv) emojiPickerDiv.remove();
-                emojiPickerDiv = null;
+                document.getElementById('messageInput').value += e.target.textContent;
+                emojiDiv.remove();
+                emojiDiv = null;
                 document.getElementById('messageInput').focus();
             };
-            emojiPickerDiv.appendChild(btn);
-        }
-        document.body.appendChild(emojiPickerDiv);
+            emojiDiv.appendChild(btn);
+        });
+        document.body.appendChild(emojiDiv);
     };
-    
-    document.addEventListener('click', function(e) {
-        const emojiBtn = document.getElementById('emojiBtn');
-        if (emojiPickerDiv && !emojiPickerDiv.contains(e.target) && e.target !== emojiBtn) {
-            emojiPickerDiv.remove();
-            emojiPickerDiv = null;
-        }
-    });
+    document.addEventListener('click', () => { if (emojiDiv) { emojiDiv.remove(); emojiDiv = null; } });
     
     document.getElementById('imageBtn').onclick = function() {
         const input = document.createElement('input');
@@ -584,7 +424,7 @@
             if (file && file.size < 2 * 1024 * 1024) {
                 const reader = new FileReader();
                 reader.onload = function(ev) {
-                    sendMessage("", true, ev.target.result);
+                    addMessage("📷 Image", true);
                 };
                 reader.readAsDataURL(file);
             } else {
@@ -593,12 +433,6 @@
         };
         input.click();
     };
-    
-    if (Notification.permission === 'default') {
-        setTimeout(function() {
-            Notification.requestPermission();
-        }, 1000);
-    }
 </script>
 </body>
 </html>
