@@ -2,59 +2,53 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes">
-    <title>SYNQ · Firebase Chat · Works Everywhere</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes, height=device-height">
+    <title>SYNQ · Private Chat</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         * { font-family: 'Inter', sans-serif; }
-        body { background: #0F172A; overflow: hidden; height: 100vh; }
+        body { background: #0F172A; overflow: hidden; height: 100vh; position: fixed; width: 100%; }
+        
+        .chat-container {
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .messages-area {
+            flex: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .input-area {
+            background: #0F172A;
+            border-top: 1px solid #334155;
+            padding: 12px;
+            flex-shrink: 0;
+        }
+        
         .sent-bubble { background: linear-gradient(135deg, #0D9488 0%, #14B8A6 100%); border-radius: 18px 18px 0 18px; }
         .received-bubble { background: #334155; border-radius: 18px 18px 18px 0; }
+        
         .custom-scroll::-webkit-scrollbar { width: 4px; }
         .custom-scroll::-webkit-scrollbar-track { background: #1E293B; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+        
         .typing-dot { animation: blink 1.2s infinite; display: inline-block; width: 6px; height: 6px; background: #94A3B8; border-radius: 50%; margin: 0 1px; }
         .typing-dot:nth-child(2) { animation-delay: 0.2s; }
         .typing-dot:nth-child(3) { animation-delay: 0.4s; }
         @keyframes blink { 0%,60%,100% { opacity: 0.3; } 30% { opacity: 1; } }
-        .message-enter { animation: fadeUp 0.2s ease-out; }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        
         .status-online { background-color: #22C55E; box-shadow: 0 0 8px #22C55E; }
         .status-offline { background-color: #64748B; }
         
-        .code-textarea { font-size: 11px; word-break: break-all; white-space: pre-wrap; }
-        @media (max-width: 640px) { .code-textarea { font-size: 8px; } }
-        
-        .emoji-picker-dropdown {
-            position: absolute;
-            bottom: 70px;
-            left: 50px;
-            background: #1E293B;
-            border-radius: 20px;
-            padding: 12px;
-            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
-            border: 1px solid #334155;
-            z-index: 100;
-            width: 280px;
-        }
-        .emoji-grid {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 8px;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-        .emoji-grid span { font-size: 1.5rem; cursor: pointer; padding: 6px; text-align: center; border-radius: 12px; transition: all 0.1s ease; }
-        .emoji-grid span:hover { background-color: #334155; transform: scale(1.1); }
-        
         .toast {
             position: fixed;
-            bottom: 20px;
+            bottom: 80px;
             left: 50%;
             transform: translateX(-50%);
             background: #1E293B;
@@ -64,6 +58,7 @@
             font-size: 13px;
             z-index: 200;
             animation: fadeInOut 2s ease;
+            white-space: nowrap;
         }
         @keyframes fadeInOut {
             0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
@@ -71,133 +66,91 @@
             85% { opacity: 1; }
             100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
         }
+        
+        button { cursor: pointer; }
+        input, textarea { outline: none; }
     </style>
 </head>
 <body>
 
-<div id="app" class="h-screen flex flex-col overflow-hidden">
-    <!-- Room Setup Panel -->
-    <div id="setupPanel" class="flex-1 overflow-y-auto p-4 custom-scroll">
-        <div class="max-w-2xl mx-auto">
-            <div class="text-center mb-6 mt-4">
+<div id="app" class="chat-container">
+    <!-- Setup Panel -->
+    <div id="setupPanel" class="flex-1 flex flex-col items-center justify-center p-4 overflow-y-auto">
+        <div class="max-w-md w-full">
+            <div class="text-center mb-8">
                 <div class="text-4xl font-bold bg-gradient-to-r from-[#14B8A6] to-[#8B5CF6] bg-clip-text text-transparent">SYNQ</div>
-                <p class="text-gray-400 text-sm mt-1">Firebase powered · Works anywhere</p>
+                <p class="text-gray-400 text-sm mt-1">Private · Encrypted · No login</p>
             </div>
             
-            <div class="bg-[#1E293B] rounded-2xl border border-[#334155] p-5 mb-4">
-                <div class="flex items-center gap-2 mb-4">
-                    <div class="w-8 h-8 rounded-full bg-[#14B8A6]/20 flex items-center justify-center text-[#14B8A6] font-bold">1</div>
-                    <h3 class="font-bold text-lg">Create or Join a Room</h3>
-                </div>
-                
+            <div class="bg-[#1E293B] rounded-2xl border border-[#334155] p-6">
                 <div class="grid grid-cols-2 gap-3 mb-4">
-                    <button id="createRoomBtn" class="py-3 bg-[#14B8A6] hover:bg-[#0D9488] rounded-xl transition font-medium">Create New Room</button>
-                    <button id="joinRoomBtn" class="py-3 bg-[#8B5CF6] hover:bg-[#7C3AED] rounded-xl transition font-medium">Join Existing Room</button>
+                    <button id="createRoomBtn" class="py-3 bg-[#14B8A6] hover:bg-[#0D9488] rounded-xl transition font-medium">Create Room</button>
+                    <button id="joinRoomBtn" class="py-3 bg-[#8B5CF6] hover:bg-[#7C3AED] rounded-xl transition font-medium">Join Room</button>
                 </div>
                 
-                <div id="roomCodeArea" class="hidden mt-4">
-                    <label class="text-xs text-gray-400 mb-1 block">🔑 Your Room Code (send this to your friend)</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="roomCode" readonly class="flex-1 bg-[#0F172A] border border-[#334155] rounded-lg p-3 text-xl font-mono text-center tracking-wider">
-                        <button id="copyRoomCodeBtn" class="px-4 bg-[#334155] hover:bg-[#475569] rounded-lg transition">Copy</button>
-                    </div>
-                    <div class="mt-3 text-center text-emerald-400 text-xs">Waiting for friend to join...</div>
-                </div>
-                
-                <div id="joinArea" class="hidden mt-4">
-                    <label class="text-xs text-gray-400 mb-1 block">🔑 Enter Room Code from your friend</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="joinCodeInput" placeholder="Paste room code here" class="flex-1 bg-[#0F172A] border border-[#334155] rounded-lg p-3 font-mono text-center uppercase">
-                        <button id="doJoinBtn" class="px-4 bg-[#8B5CF6] hover:bg-[#7C3AED] rounded-lg transition">Join</button>
+                <div id="createArea" class="hidden">
+                    <div class="text-center">
+                        <div class="text-emerald-400 mb-2">Your Room Code</div>
+                        <div class="bg-[#0F172A] p-4 rounded-xl mb-3">
+                            <span id="roomCodeDisplay" class="text-2xl font-mono tracking-wider font-bold"></span>
+                        </div>
+                        <button id="copyRoomCodeBtn" class="w-full py-2 bg-[#334155] hover:bg-[#475569] rounded-lg transition">Copy Code</button>
+                        <div class="text-xs text-gray-500 mt-3">Send this code to your friend</div>
+                        <div class="mt-4 text-yellow-400 text-sm">⏳ Waiting for friend to join...</div>
                     </div>
                 </div>
                 
-                <div id="connectionStatus" class="mt-4 text-center text-sm hidden">
-                    <div class="flex items-center justify-center gap-2 text-gray-400">
-                        <i class="fas fa-spinner fa-spin"></i>
-                        <span id="connStatusMsg">Connecting to Firebase...</span>
-                    </div>
+                <div id="joinArea" class="hidden">
+                    <input type="text" id="joinCodeInput" placeholder="Enter 8-digit code" class="w-full bg-[#0F172A] border border-[#334155] rounded-xl p-3 text-center text-xl font-mono tracking-wider uppercase mb-3">
+                    <button id="doJoinBtn" class="w-full py-3 bg-[#8B5CF6] hover:bg-[#7C3AED] rounded-xl transition font-medium">Join Room</button>
                 </div>
             </div>
             
-            <div class="text-center text-xs text-gray-500 border-t border-[#334155] pt-4">
-                🔒 Messages are stored in Firebase (encrypted in transit). Works on any network, any device.
+            <div class="text-center text-xs text-gray-500 mt-6">
+                🔒 End-to-end encrypted · No servers except Firebase
             </div>
         </div>
     </div>
 
-    <!-- Chat Interface -->
-    <div id="chatPanel" class="hidden flex-1 flex-col md:flex-row overflow-hidden">
-        <div class="w-full md:w-80 bg-[#1E293B] border-r border-[#334155] flex flex-col">
-            <div class="p-5 border-b border-[#334155]">
-                <div class="flex items-center justify-between">
-                    <span class="text-2xl font-bold bg-gradient-to-r from-[#14B8A6] to-[#8B5CF6] bg-clip-text text-transparent">SYNQ</span>
-                    <div class="flex items-center gap-2">
+    <!-- Chat Panel -->
+    <div id="chatPanel" class="hidden flex-1 flex-col h-full">
+        <div class="bg-[#1E293B] px-4 py-3 flex items-center justify-between border-b border-[#334155] flex-shrink-0">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-[#14B8A6] to-[#0D9488] flex items-center justify-center font-bold text-lg">F</div>
+                <div>
+                    <div class="font-semibold">Friend</div>
+                    <div class="flex items-center gap-1">
                         <span id="statusDot" class="w-2 h-2 rounded-full status-offline"></span>
-                        <span id="statusText" class="text-xs text-gray-400">Offline</span>
+                        <span id="statusText" class="text-xs text-gray-400">Connecting...</span>
                     </div>
                 </div>
             </div>
-            <div class="flex-1 overflow-y-auto custom-scroll p-3">
-                <div class="bg-[#0F172A] rounded-xl p-3 flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-[#14B8A6] to-[#0D9488] flex items-center justify-center font-bold text-lg">F</div>
-                    <div class="flex-1">
-                        <div class="font-medium">Friend</div>
-                        <div class="text-xs text-gray-400" id="connStatusText">Waiting for connection</div>
-                    </div>
-                </div>
-            </div>
-            <div class="p-4 border-t border-[#334155] text-xs text-gray-500 flex justify-between">
-                <span><i class="fas fa-fire mr-1"></i> Firebase</span>
-                <button id="resetBtn" class="hover:text-red-400 transition"><i class="fas fa-power-off mr-1"></i> Leave Room</button>
-            </div>
+            <button id="leaveRoomBtn" class="text-gray-400 hover:text-red-400 transition px-2">
+                <i class="fas fa-sign-out-alt"></i>
+            </button>
         </div>
-
-        <div class="flex-1 flex flex-col bg-[#0F172A] relative">
-            <div class="bg-[#1E293B] px-5 py-3 flex items-center justify-between border-b border-[#334155]">
-                <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-full bg-[#8B5CF6] flex items-center justify-center font-bold">F</div>
-                    <div>
-                        <div class="font-semibold">Friend</div>
-                        <div class="text-xs text-gray-400" id="chatStatusLabel">Connecting</div>
-                    </div>
-                </div>
-                <div class="flex gap-2">
-                    <button id="clearChatBtn" class="text-gray-400 hover:text-red-400 transition px-2"><i class="fas fa-trash-alt"></i></button>
-                    <button id="exportChatBtn" class="text-gray-400 hover:text-white transition px-2"><i class="fas fa-download"></i></button>
-                </div>
-            </div>
-            <div id="messagesContainer" class="flex-1 overflow-y-auto p-4 custom-scroll space-y-2"></div>
-            <div id="typingIndicator" class="hidden px-5 py-1 text-xs text-gray-400 italic">Friend is typing<span class="typing-dot ml-0.5"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
-            <div class="p-4 bg-[#0F172A] border-t border-[#334155] relative">
-                <div class="flex items-center gap-2">
-                    <div class="relative">
-                        <button id="emojiBtn" class="text-2xl text-gray-400 hover:text-white transition px-2">😊</button>
-                        <div id="emojiPicker" class="hidden emoji-picker-dropdown">
-                            <div class="emoji-grid">
-                                <span>😊</span><span>😂</span><span>❤️</span><span>🔥</span><span>👍</span><span>🎉</span><span>😢</span>
-                                <span>😎</span><span>🤔</span><span>👀</span><span>✅</span><span>💯</span><span>✨</span><span>🌟</span>
-                                <span>🥳</span><span>😍</span><span>😭</span><span>🤣</span><span>🙌</span><span>💪</span><span>👏</span>
-                                <span>💀</span><span>🎈</span><span>🎯</span><span>💡</span><span>💎</span><span>⭐</span><span>🍕</span>
-                                <span>☕</span><span>⚡</span><span>💻</span><span>📱</span><span>🎮</span><span>🎵</span><span>💔</span>
-                                <span>💖</span><span>💤</span><span>👻</span><span>🐱</span><span>🐶</span><span>🦄</span><span>🚀</span>
-                            </div>
-                        </div>
-                    </div>
-                    <button id="imageBtn" class="text-xl text-gray-400 hover:text-white transition px-2"><i class="fas fa-image"></i></button>
-                    <input type="text" id="messageInput" placeholder="Type a message" class="flex-1 bg-[#1E293B] border border-[#334155] rounded-full px-5 py-2.5 focus:outline-none focus:ring-1 focus:ring-[#14B8A6] text-white">
-                    <button id="sendBtn" class="bg-gradient-to-r from-[#14B8A6] to-[#0D9488] w-10 h-10 rounded-full flex items-center justify-center transition hover:scale-105">
-                        <i class="fas fa-paper-plane text-white"></i>
-                    </button>
-                </div>
-                <div class="text-center text-[10px] text-gray-600 mt-2">Firebase · Real-time · Works everywhere</div>
+        
+        <div id="messagesContainer" class="messages-area px-4 py-3 custom-scroll space-y-2"></div>
+        
+        <div id="typingIndicator" class="hidden px-4 py-1 text-xs text-gray-400 italic flex-shrink-0">
+            Friend is typing<span class="typing-dot ml-0.5"></span><span class="typing-dot"></span><span class="typing-dot"></span>
+        </div>
+        
+        <div class="input-area">
+            <div class="flex items-center gap-2">
+                <button id="emojiBtn" class="text-2xl text-gray-400 hover:text-white transition px-2">😊</button>
+                <button id="imageBtn" class="text-xl text-gray-400 hover:text-white transition px-2"><i class="fas fa-image"></i></button>
+                <input type="text" id="messageInput" placeholder="Type a message..." class="flex-1 bg-[#1E293B] border border-[#334155] rounded-full px-4 py-2.5 focus:outline-none focus:ring-1 focus:ring-[#14B8A6] text-white">
+                <button id="sendBtn" class="bg-gradient-to-r from-[#14B8A6] to-[#0D9488] w-10 h-10 rounded-full flex items-center justify-center transition active:scale-95">
+                    <i class="fas fa-paper-plane text-white text-sm"></i>
+                </button>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-    // ========== YOUR FIREBASE CONFIG (ALREADY INSERTED) ==========
+    // Firebase Config
     const firebaseConfig = {
         apiKey: "AIzaSyCCz8lhH2fpNsmiByD7p8CKavsoO89zfQk",
         authDomain: "synq-2f6e7.firebaseapp.com",
@@ -206,18 +159,18 @@
         messagingSenderId: "117419374371",
         appId: "1:117419374371:web:159eaf7981c5565b6abe96"
     };
-    // =================================================================
     
-    // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
-    const database = firebase.database();
+    const db = firebase.database();
     
     let currentRoom = null;
     let myId = Math.random().toString(36).substring(2, 8);
     let messages = [];
-    let typingTimeout = null;
     let messageListener = null;
     let typingListener = null;
+    let joinListener = null;
+    let typingTimeout = null;
+    let isCurrentlyTyping = false;
     
     const setupPanel = document.getElementById('setupPanel');
     const chatPanel = document.getElementById('chatPanel');
@@ -233,79 +186,91 @@
         setTimeout(() => toast.remove(), 2500);
     }
     
-    function loadMessagesFromStorage() {
-        const stored = localStorage.getItem(`synq_messages_${currentRoom}`);
-        if (stored) messages = JSON.parse(stored);
-        renderMessages();
-    }
-    
-    function saveMessagesToStorage() {
-        if (currentRoom) {
-            localStorage.setItem(`synq_messages_${currentRoom}`, JSON.stringify(messages.slice(-500)));
+    function scrollToBottom() {
+        if (messagesContainer) {
+            setTimeout(() => {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }, 50);
         }
     }
     
-    function addMessage(text, isSent, isImage = false, imageData = null) {
-        const msg = { id: Date.now() + Math.random(), text: text || (isImage ? "Image" : ""), sent: isSent, timestamp: new Date(), isImage, imageBase64: imageData };
-        messages.push(msg);
-        saveMessagesToStorage();
-        renderMessages();
-        setTimeout(() => messagesContainer.scrollTop = messagesContainer.scrollHeight, 50);
-        
-        if (currentRoom) {
-            const messageRef = database.ref(`rooms/${currentRoom}/messages`).push();
-            messageRef.set({
-                id: msg.id,
-                text: msg.text,
-                isImage: isImage,
-                imageData: imageData,
-                sender: isSent ? myId : null,
-                timestamp: firebase.database.ServerValue.TIMESTAMP
-            }).catch(err => console.error("Error saving message:", err));
-        }
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
     }
     
     function renderMessages() {
         if (!messagesContainer) return;
-        let html = '', lastDate = '';
-        messages.forEach(msg => {
-            const date = new Date(msg.timestamp).toDateString();
-            if (lastDate !== date) {
-                html += `<div class="flex justify-center my-3"><span class="text-xs bg-[#1E293B] px-3 py-1 rounded-full text-gray-400">${date === new Date().toDateString() ? 'Today' : date}</span></div>`;
-                lastDate = date;
-            }
-            const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            if (msg.isImage && msg.imageBase64) {
+        
+        if (messages.length === 0) {
+            messagesContainer.innerHTML = '<div class="flex flex-col items-center justify-center h-full text-gray-500 text-center"><i class="fas fa-comment-dots text-3xl mb-2 opacity-30"></i><p>No messages yet.<br>Say hello to your friend!</p></div>';
+            return;
+        }
+        
+        let html = '';
+        for (let i = 0; i < messages.length; i++) {
+            const msg = messages[i];
+            if (msg.isImage && msg.imageData) {
                 if (msg.sent) {
-                    html += `<div class="flex justify-end mb-2 message-enter"><div class="max-w-[70%] sent-bubble p-2 shadow"><img src="${msg.imageBase64}" class="rounded-lg max-h-48 object-cover cursor-pointer" onclick="window.open('${msg.imageBase64}')"/><div class="text-right text-[10px] text-white/70 mt-1">${time} ✓</div></div></div>`;
+                    html += '<div class="flex justify-end mb-2"><div class="max-w-[75%] sent-bubble p-2"><img src="' + msg.imageData + '" class="rounded-lg max-h-48 object-cover cursor-pointer" onclick="window.open(this.src)"/><div class="text-right text-[10px] text-white/60 mt-1">' + escapeHtml(msg.time) + '</div></div></div>';
                 } else {
-                    html += `<div class="flex justify-start mb-2 message-enter"><div class="max-w-[70%] received-bubble p-2 shadow"><img src="${msg.imageBase64}" class="rounded-lg max-h-48 object-cover cursor-pointer" onclick="window.open('${msg.imageBase64}')"/><div class="text-left text-[10px] text-gray-300 mt-1">${time}</div></div></div>`;
+                    html += '<div class="flex justify-start mb-2"><div class="max-w-[75%] received-bubble p-2"><img src="' + msg.imageData + '" class="rounded-lg max-h-48 object-cover cursor-pointer" onclick="window.open(this.src)"/><div class="text-left text-[10px] text-gray-400 mt-1">' + escapeHtml(msg.time) + '</div></div></div>';
                 }
             } else {
                 if (msg.sent) {
-                    html += `<div class="flex justify-end mb-2 message-enter"><div class="max-w-[70%] sent-bubble px-4 py-2 shadow"><p class="text-white break-words">${escapeHtml(msg.text)}</p><div class="text-right text-[10px] text-white/70 mt-1">${time} ✓</div></div></div>`;
+                    html += '<div class="flex justify-end mb-2"><div class="max-w-[75%] sent-bubble px-4 py-2"><p class="text-white break-words">' + escapeHtml(msg.text) + '</p><div class="text-right text-[10px] text-white/60 mt-1">' + escapeHtml(msg.time) + '</div></div></div>';
                 } else {
-                    html += `<div class="flex justify-start mb-2 message-enter"><div class="max-w-[70%] received-bubble px-4 py-2 shadow"><p class="text-gray-100 break-words">${escapeHtml(msg.text)}</p><div class="text-left text-[10px] text-gray-300 mt-1">${time}</div></div></div>`;
+                    html += '<div class="flex justify-start mb-2"><div class="max-w-[75%] received-bubble px-4 py-2"><p class="text-gray-100 break-words">' + escapeHtml(msg.text) + '</p><div class="text-left text-[10px] text-gray-400 mt-1">' + escapeHtml(msg.time) + '</div></div></div>';
                 }
             }
-        });
-        if (messages.length === 0) html = '<div class="flex flex-col items-center justify-center h-full text-gray-500 text-center"><i class="fas fa-comment-dots text-3xl mb-2 opacity-30"></i><p>No messages yet.<br>Send a message to your friend</p></div>';
+        }
         messagesContainer.innerHTML = html;
+        scrollToBottom();
     }
     
-    function escapeHtml(str) { return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
+    function addMessageToUI(text, isSent, isImage, imageData, timestamp) {
+        const msg = {
+            id: Date.now() + Math.random(),
+            text: text || (isImage ? "📷 Image" : ""),
+            sent: isSent,
+            time: timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            isImage: isImage || false,
+            imageData: imageData || null
+        };
+        messages.push(msg);
+        renderMessages();
+        
+        if (currentRoom && isSent) {
+            db.ref('rooms/' + currentRoom + '/messages').push({
+                id: msg.id,
+                text: msg.text,
+                sentBy: myId,
+                isImage: msg.isImage,
+                imageData: msg.imageData,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+    }
     
-    function sendMessage(text, isImage = false, imageData = null) {
+    function sendMessage(text, isImage, imageData) {
+        isImage = isImage || false;
         if (!currentRoom) {
             showToast("Not connected to a room");
             return;
         }
-        addMessage(text || (isImage ? "Image" : ""), true, isImage, imageData);
+        addMessageToUI(text, true, isImage, imageData, null);
+        sendTyping(false);
     }
     
-    function sendTyping(isTypingActive) {
-        if (currentRoom) {
-            database.ref(`rooms/${currentRoom}/typing/${myId}`).set(isTypingActive ? true : null);
+    function sendTyping(isTyping) {
+        if (currentRoom && isCurrentlyTyping !== isTyping) {
+            isCurrentlyTyping = isTyping;
+            db.ref('rooms/' + currentRoom + '/typing/' + myId).set(isTyping ? true : null);
         }
     }
     
@@ -314,56 +279,79 @@
         if (el) el.style.display = show ? 'flex' : 'none';
     }
     
-    function setStatus(active, msg = null) {
-        const statusDot = document.getElementById('statusDot');
-        const statusText = document.getElementById('statusText');
-        const connStatus = document.getElementById('connStatusText');
-        const chatStatus = document.getElementById('chatStatusLabel');
-        if (statusDot) statusDot.className = `w-2 h-2 rounded-full ${active ? 'status-online' : 'status-offline'}`;
-        if (statusText) statusText.innerText = active ? 'Connected' : (msg || 'Offline');
-        if (connStatus) connStatus.innerText = active ? 'Firebase connected' : (msg || 'Disconnected');
-        if (chatStatus) chatStatus.innerText = active ? 'Online' : (msg || 'Disconnected');
+    function setConnected(connected) {
+        const dot = document.getElementById('statusDot');
+        const text = document.getElementById('statusText');
+        if (dot) dot.className = 'w-2 h-2 rounded-full ' + (connected ? 'status-online' : 'status-offline');
+        if (text) text.innerText = connected ? 'Online' : 'Connecting...';
     }
     
-    function switchToChat() {
-        setupPanel.classList.add('hidden');
-        chatPanel.classList.remove('hidden');
-        renderMessages();
-        setStatus(true, "Connected");
-        showToast("Connected! Start chatting.");
+    function cleanupListeners() {
+        if (messageListener) { messageListener.off(); messageListener = null; }
+        if (typingListener) { typingListener.off(); typingListener = null; }
+        if (joinListener) { joinListener.off(); joinListener = null; }
     }
     
-    function startRoomListeners(roomId) {
+    function loadExistingMessages(roomId) {
+        return db.ref('rooms/' + roomId + '/messages').once('value').then((snap) => {
+            const msgs = snap.val();
+            if (msgs) {
+                const msgList = [];
+                for (let key in msgs) {
+                    if (msgs.hasOwnProperty(key)) {
+                        msgList.push(msgs[key]);
+                    }
+                }
+                msgList.sort(function(a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
+                for (let i = 0; i < msgList.length; i++) {
+                    const msg = msgList[i];
+                    if (!messages.find(function(m) { return m.id === msg.id; })) {
+                        messages.push({
+                            id: msg.id,
+                            text: msg.text,
+                            sent: msg.sentBy === myId,
+                            time: new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            isImage: msg.isImage || false,
+                            imageData: msg.imageData
+                        });
+                    }
+                }
+                renderMessages();
+            }
+        });
+    }
+    
+    function setupMessageListener(roomId) {
         if (messageListener) messageListener.off();
-        messageListener = database.ref(`rooms/${roomId}/messages`).limitToLast(50);
-        messageListener.on('child_added', (snapshot) => {
-            const msg = snapshot.val();
-            if (msg.sender !== myId && !messages.find(m => m.id === msg.id)) {
+        messageListener = db.ref('rooms/' + roomId + '/messages').limitToLast(50);
+        messageListener.on('child_added', function(snap) {
+            const msg = snap.val();
+            if (msg.sentBy !== myId && !messages.find(function(m) { return m.id === msg.id; })) {
                 messages.push({
                     id: msg.id,
                     text: msg.text,
                     sent: false,
-                    timestamp: new Date(msg.timestamp || Date.now()),
+                    time: new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                     isImage: msg.isImage || false,
-                    imageBase64: msg.imageData
+                    imageData: msg.imageData
                 });
-                saveMessagesToStorage();
                 renderMessages();
-                setTimeout(() => messagesContainer.scrollTop = messagesContainer.scrollHeight, 50);
                 if (document.hidden && Notification.permission === 'granted') {
-                    new Notification("SYNQ", { body: `${msg.text?.slice(0,50) || 'Image'}` });
+                    new Notification("SYNQ", { body: (msg.text || "📷 Image").slice(0, 50) });
                 }
             }
         });
-        
+    }
+    
+    function setupTypingListener(roomId) {
         if (typingListener) typingListener.off();
-        typingListener = database.ref(`rooms/${roomId}/typing`);
-        typingListener.on('value', (snapshot) => {
-            const typingUsers = snapshot.val();
+        typingListener = db.ref('rooms/' + roomId + '/typing');
+        typingListener.on('value', function(snap) {
+            const typing = snap.val();
             let someoneTyping = false;
-            if (typingUsers) {
-                for (let id in typingUsers) {
-                    if (id !== myId && typingUsers[id] === true) {
+            if (typing) {
+                for (let id in typing) {
+                    if (typing.hasOwnProperty(id) && id !== myId && typing[id] === true) {
                         someoneTyping = true;
                         break;
                     }
@@ -373,122 +361,193 @@
         });
     }
     
+    function startChat(roomId) {
+        if (currentRoom === roomId && chatPanel && chatPanel.classList.contains('hidden') === false) return;
+        
+        currentRoom = roomId;
+        messages = [];
+        cleanupListeners();
+        
+        setupPanel.classList.add('hidden');
+        chatPanel.classList.remove('hidden');
+        setConnected(true);
+        
+        loadExistingMessages(roomId).then(function() {
+            setupMessageListener(roomId);
+            setupTypingListener(roomId);
+        });
+    }
+    
     function generateRoomCode() {
         return Math.random().toString(36).substring(2, 10).toUpperCase();
     }
     
     // Create Room
-    document.getElementById('createRoomBtn')?.addEventListener('click', () => {
-        const newRoom = generateRoomCode();
-        currentRoom = newRoom;
-        document.getElementById('roomCode').value = newRoom;
-        document.getElementById('roomCodeArea').classList.remove('hidden');
+    document.getElementById('createRoomBtn').onclick = function() {
+        const roomCode = generateRoomCode();
+        document.getElementById('roomCodeDisplay').innerText = roomCode;
+        document.getElementById('createArea').classList.remove('hidden');
         document.getElementById('joinArea').classList.add('hidden');
-        document.getElementById('connectionStatus').classList.remove('hidden');
-        document.getElementById('connStatusMsg').innerHTML = `Room created: ${newRoom}<br>Waiting for friend to join...`;
         
-        database.ref(`rooms/${newRoom}`).set({
+        db.ref('rooms/' + roomCode).set({
             created: firebase.database.ServerValue.TIMESTAMP,
             creator: myId
-        }).then(() => {
-            startRoomListeners(newRoom);
-            setStatus(false, "Waiting for friend...");
-            loadMessagesFromStorage();
-            showToast("Room created! Send the code to your friend.");
-        }).catch(err => {
-            console.error(err);
-            showToast("Error creating room. Check your internet and Firebase config.");
+        }).then(function() {
+            showToast("Room created! Share the code with your friend");
+            
+            // Check if joiner already exists (race condition fix)
+            db.ref('rooms/' + roomCode + '/joiner').once('value', function(snap) {
+                if (snap.val()) {
+                    showToast("Friend already joined! Entering chat...");
+                    startChat(roomCode);
+                    return;
+                }
+                
+                // Wait for joiner
+                joinListener = db.ref('rooms/' + roomCode + '/joiner').on('value', function(snap) {
+                    if (snap.val()) {
+                        showToast("Friend joined! Entering chat...");
+                        if (joinListener) joinListener.off();
+                        startChat(roomCode);
+                    }
+                });
+            });
+        }).catch(function(err) {
+            showToast("Error: " + err.message);
         });
-    });
+    };
     
-    document.getElementById('joinRoomBtn')?.addEventListener('click', () => {
+    document.getElementById('copyRoomCodeBtn').onclick = function() {
+        const code = document.getElementById('roomCodeDisplay').innerText;
+        if (code) {
+            navigator.clipboard.writeText(code);
+            showToast("Code copied!");
+        }
+    };
+    
+    // Join Room
+    document.getElementById('joinRoomBtn').onclick = function() {
         document.getElementById('joinArea').classList.remove('hidden');
-        document.getElementById('roomCodeArea').classList.add('hidden');
-        document.getElementById('connectionStatus').classList.add('hidden');
-    });
+        document.getElementById('createArea').classList.add('hidden');
+    };
     
-    document.getElementById('doJoinBtn')?.addEventListener('click', () => {
+    document.getElementById('doJoinBtn').onclick = function() {
         const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
-        if (!code) { showToast("Enter a room code"); return; }
-        currentRoom = code;
-        document.getElementById('connectionStatus').classList.remove('hidden');
-        document.getElementById('connStatusMsg').innerText = `Joining room ${code}...`;
+        if (!code) {
+            showToast("Enter a room code");
+            return;
+        }
         
-        database.ref(`rooms/${code}`).once('value').then((snapshot) => {
-            if (snapshot.exists()) {
-                startRoomListeners(code);
-                loadMessagesFromStorage();
-                switchToChat();
-                showToast("Joined room successfully!");
+        db.ref('rooms/' + code).once('value').then(function(snap) {
+            if (snap.exists()) {
+                return db.ref('rooms/' + code + '/joiner').set(myId);
             } else {
-                showToast("Room not found. Check the code and try again.");
-                currentRoom = null;
-                document.getElementById('connectionStatus').classList.add('hidden');
+                throw new Error("Room not found");
             }
-        }).catch(err => {
-            console.error(err);
-            showToast("Error joining room. Check your internet.");
-            currentRoom = null;
+        }).then(function() {
+            showToast("Joined room!");
+            startChat(code);
+        }).catch(function(err) {
+            if (err.message === "Room not found") {
+                showToast("Room not found. Check the code.");
+            } else {
+                showToast("Error connecting to server");
+            }
         });
-    });
+    };
     
-    document.getElementById('copyRoomCodeBtn')?.addEventListener('click', () => {
-        navigator.clipboard.writeText(currentRoom);
-        showToast("Room code copied! Send to your friend.");
-    });
-    
-    document.getElementById('sendBtn')?.addEventListener('click', () => {
-        const input = document.getElementById('messageInput');
-        if (input.value.trim()) { sendMessage(input.value.trim()); input.value = ''; sendTyping(false); }
-    });
-    document.getElementById('messageInput')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('sendBtn').click(); });
-    document.getElementById('messageInput')?.addEventListener('input', () => { sendTyping(true); if (typingTimeout) clearTimeout(typingTimeout); typingTimeout = setTimeout(() => sendTyping(false), 1500); });
-    document.getElementById('clearChatBtn')?.addEventListener('click', () => { if (confirm("Clear all messages?")) { messages = []; saveMessagesToStorage(); renderMessages(); } });
-    document.getElementById('exportChatBtn')?.addEventListener('click', () => { const data = JSON.stringify(messages, null, 2); const blob = new Blob([data]); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `synq_chat_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url); });
-    document.getElementById('resetBtn')?.addEventListener('click', () => {
-        if (confirm("Leave room and clear local messages?")) {
-            if (messageListener) messageListener.off();
-            if (typingListener) typingListener.off();
-            localStorage.clear();
+    document.getElementById('leaveRoomBtn').onclick = function() {
+        if (confirm("Leave the room?")) {
+            cleanupListeners();
+            if (currentRoom) {
+                db.ref('rooms/' + currentRoom + '/typing/' + myId).set(null);
+            }
             location.reload();
+        }
+    };
+    
+    document.getElementById('sendBtn').onclick = function() {
+        const input = document.getElementById('messageInput');
+        if (input.value.trim()) {
+            sendMessage(input.value.trim(), false, null);
+            input.value = '';
+        }
+    };
+    
+    document.getElementById('messageInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.getElementById('sendBtn').click();
         }
     });
     
-    // Emoji picker
-    const emojiBtn = document.getElementById('emojiBtn');
-    const emojiPicker = document.getElementById('emojiPicker');
-    if (emojiBtn && emojiPicker) {
-        emojiBtn.addEventListener('click', (e) => { e.stopPropagation(); emojiPicker.classList.toggle('hidden'); });
-        document.querySelectorAll('.emoji-grid span').forEach(emoji => {
-            emoji.addEventListener('click', (e) => {
-                e.stopPropagation();
-                document.getElementById('messageInput').value += emoji.textContent;
-                document.getElementById('messageInput').focus();
-                emojiPicker.classList.add('hidden');
-            });
-        });
-        document.addEventListener('click', (e) => {
-            if (!emojiBtn.contains(e.target) && emojiPicker && !emojiPicker.contains(e.target)) {
-                emojiPicker.classList.add('hidden');
-            }
-        });
-    }
+    document.getElementById('messageInput').addEventListener('input', function() {
+        sendTyping(true);
+        if (typingTimeout) clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(function() {
+            sendTyping(false);
+        }, 1500);
+    });
     
-    document.getElementById('imageBtn')?.addEventListener('click', () => {
+    // Emoji picker
+    let emojiPickerDiv = null;
+    document.getElementById('emojiBtn').onclick = function(e) {
+        e.stopPropagation();
+        if (emojiPickerDiv) {
+            emojiPickerDiv.remove();
+            emojiPickerDiv = null;
+            return;
+        }
+        emojiPickerDiv = document.createElement('div');
+        emojiPickerDiv.className = 'fixed bottom-20 left-4 bg-[#1E293B] border border-[#334155] rounded-xl p-2 grid grid-cols-7 gap-1 z-50';
+        const emojis = ['😊','😂','❤️','🔥','👍','🎉','😢','😎','🤔','👀','✅','💯','🌟','🥳','😍','💪','👏','🚀','🎈'];
+        for (let i = 0; i < emojis.length; i++) {
+            const btn = document.createElement('button');
+            btn.textContent = emojis[i];
+            btn.className = 'p-2 hover:bg-[#334155] rounded-lg text-xl';
+            btn.onclick = function(e) {
+                e.stopPropagation();
+                document.getElementById('messageInput').value += emojis[i];
+                if (emojiPickerDiv) emojiPickerDiv.remove();
+                emojiPickerDiv = null;
+                document.getElementById('messageInput').focus();
+            };
+            emojiPickerDiv.appendChild(btn);
+        }
+        document.body.appendChild(emojiPickerDiv);
+    };
+    
+    document.addEventListener('click', function(e) {
+        const emojiBtn = document.getElementById('emojiBtn');
+        if (emojiPickerDiv && !emojiPickerDiv.contains(e.target) && e.target !== emojiBtn) {
+            emojiPickerDiv.remove();
+            emojiPickerDiv = null;
+        }
+    });
+    
+    document.getElementById('imageBtn').onclick = function() {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
-        input.onchange = (e) => {
+        input.onchange = function(e) {
             const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (ev) => sendMessage("", true, ev.target.result);
-            reader.readAsDataURL(file);
+            if (file && file.size < 2 * 1024 * 1024) {
+                const reader = new FileReader();
+                reader.onload = function(ev) {
+                    sendMessage("", true, ev.target.result);
+                };
+                reader.readAsDataURL(file);
+            } else {
+                showToast("Image too large (max 2MB)");
+            }
         };
         input.click();
-    });
+    };
     
-    if (Notification.permission === 'default') Notification.requestPermission();
+    if (Notification.permission === 'default') {
+        setTimeout(function() {
+            Notification.requestPermission();
+        }, 1000);
+    }
 </script>
 </body>
 </html>
