@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes, height=device-height">
     <title>SYNQ · Amethyst & Teal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -47,14 +47,6 @@
                 repeating-linear-gradient(135deg, rgba(114, 9, 183, 0.03) 0px, rgba(114, 9, 183, 0.03) 1px, transparent 1px, transparent 40px);
             pointer-events: none;
             z-index: 0;
-        }
-        
-        .glow-purple {
-            box-shadow: 0 0 20px rgba(114, 9, 183, 0.3);
-        }
-        
-        .glow-teal {
-            box-shadow: 0 0 20px rgba(20, 162, 157, 0.3);
         }
         
         #setupPanel {
@@ -262,6 +254,46 @@
         .typing-indicator {
             animation: subtlePulse 1.5s ease-in-out infinite;
         }
+        
+        /* Mobile optimizations - WhatsApp style */
+        @media (max-width: 768px) {
+            .messages-area {
+                padding: 12px 12px;
+            }
+            .sent-bubble, .received-bubble {
+                max-width: 85%;
+            }
+            .premium-card {
+                margin: 16px;
+                width: calc(100% - 32px);
+            }
+            .chat-header {
+                padding: 10px 12px;
+            }
+            .input-area {
+                padding: 8px 12px;
+            }
+            .premium-input {
+                padding: 10px 16px;
+                font-size: 16px;
+            }
+            .emojiBtn, .imageBtn {
+                padding: 8px;
+            }
+            .sendBtn {
+                width: 44px;
+                height: 44px;
+            }
+            .message-actions {
+                top: -28px;
+                padding: 4px 10px;
+                gap: 8px;
+            }
+            .message-actions button {
+                font-size: 10px;
+                padding: 2px 6px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -272,7 +304,7 @@
             <div class="text-5xl font-bold tracking-tight gradient-text">
                 SYNQ
             </div>
-            <p class="text-gray-400 text-sm mt-2 font-light">Amethyst & Teal · Encrypted</p>
+            <p class="text-gray-400 text-sm mt-2 font-light">Private Chat</p>
         </div>
         
         <div class="grid grid-cols-2 gap-3 mb-4">
@@ -298,7 +330,7 @@
         </div>
         
         <div class="text-center text-xs text-gray-500 mt-6">
-            🔒 End-to-end encrypted · Purple & Teal
+            🔒 End-to-end encrypted
         </div>
     </div>
 </div>
@@ -334,6 +366,11 @@
             </button>
         </div>
     </div>
+</div>
+
+<!-- Footer -->
+<div class="fixed bottom-3 left-0 right-0 text-center z-50 pointer-events-none">
+    <p class="text-[10px] text-gray-500 font-light tracking-wide">Project by Emmanuel Omodiale</p>
 </div>
 
 <script>
